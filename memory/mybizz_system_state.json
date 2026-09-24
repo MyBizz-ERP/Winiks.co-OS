@@ -1,0 +1,48 @@
+{
+    "project_name": "WINIKS ERP (MyBizz)",
+    "tech_stack": {
+        "framework": "Next.js 16 (App Router)",
+        "database": "Supabase (PostgreSQL)",
+        "styling": "Tailwind CSS",
+        "local_cache": "IndexedDB",
+        "auth": "Supabase Auth (Multi-Tenant)"
+    },
+    "current_phase": "Phase 2C (POS Checkout Engine Completed) -> Moving to 2D (Ledger)",
+    "active_module": "Wholesale ERP",
+    "database_architecture": {
+        "public_schema": [
+            "categories",
+            "shops"
+        ],
+        "wholesale_schema": [
+            "products",
+            "customers",
+            "invoices",
+            "invoice_items",
+            "suppliers",
+            "purchase_bills"
+        ],
+        "security": "Strict Row Level Security (RLS) Vault isolation matching `shops.owner_id == auth.uid()`"
+    },
+    "completed_milestones": [
+        "Super Admin Provisioning Dashboard (Full generation of auth identity and shop config)",
+        "Tenant Authentication Gateway & Middleware Router Guard",
+        "Bulk CSV System (Uploading and mapping Products/Customers)",
+        "High-Speed Point of Sale (POS) Interface (Keyboard-driven, Instant Search)",
+        "Offline-first POS resilience (IndexedDB syncs on mount)",
+        "Automated Financial POS Engine (Calculates new Udhaari, deducts stock via PgSQL RPC Transaction)",
+        "Multilingual Receipt Generation (White Fintech UI + A4/Thermal Hardware Triggers)"
+    ],
+    "upcoming_tasks": [
+        "Build the standalone Customers / Udhaari Ledger Page",
+        "Create UI to record manual payments against outstanding Udhaari balances",
+        "Deploy Reports & History section (Invoice tracking)",
+        "Phase 3: Hook up Baileys WhatsApp Node Daemon for automated digital receipts and Google Map Reviews"
+    ],
+    "crucial_files": {
+        "pos_ui": "src/app/erp/wholesale/pos/page.tsx",
+        "pos_checkout_transaction_sql": "sql_updates/11_pos_checkout_transaction.sql",
+        "super_admin_provisioner": "src/app/admin/shops/ClientShopProvisioner.tsx",
+        "database_schema": "sql_updates/05_wholesale_complete_schema.sql"
+    }
+}

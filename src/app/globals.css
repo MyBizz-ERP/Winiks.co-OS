@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ========================================================
+   HARDWARE THERMAL PRINT ENGINE (80mm) 
+   ======================================================== */
+@media print {
+  /* 1. Define the physical paper roll size */
+  @page {
+    size: 80mm auto;
+    margin: 0; /* Let the printer handle mechanical margins */
+  }
+
+  /* 2. Hide everything by default across the entire ERP */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 3. Aggressively target the receipt wrapper and display it overlaying everything */
+  .print-section, .print-section * {
+    visibility: visible;
+  }
+
+  .print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    /* Ensure absolute black for crisp thermal burn contrast */
+    color: #000 !important; 
+    background-color: transparent !important;
+  }
+
+  /* 4. Hide specific UI buttons that might exist inside the receipt (like X) */
+  .hide-on-print, .hide-on-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 5. Override Tailwind background colors to save toner/burn lines */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

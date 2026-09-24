@@ -1,0 +1,265 @@
+📄 PRODUCT REQUIREMENT DOCUMENT (PRD)
+Project Name: MyBizz-ERP (The Modular Multi-Category SaaS for Indian MSMEs)Document Version: 1.0Target Market: Indian Retailers, Wholesalers, and Service Businesses
+1. Target Audience
+This platform is designed specifically for the Indian MSME (Micro, Small, and Medium Enterprises) sector, bridging the gap for businesses that find software like Tally too complex and basic billing apps too restrictive.
+Primary User (Kirana Wholesaler): High-volume counter sales operating in fast-paced retail or wholesale environments. They often manage multiple billing stations across different floors or counters, deal extensively with credit (Udhaari), and require rapid, keyboard-only data entry.
+Secondary User (Salon Owner / Service Business): Businesses that do not carry heavy physical stock but need robust management for appointment calendars, service menus, stylist/staff commissions, and customer loyalty rewards.
+Future Expansions: Apparel stores (requiring size/color matrix variant tracking), automobile repair garages, and local pharmacies.
+2. Market Gaps
+The Scale vs. Complexity Gap: Traditional software like Tally demands a certified accountant to operate efficiently. Conversely, entry-level apps like Vyapar fail to provide multi-terminal real-time database synchronization required by growing wholesalers. MyBizz-ERP provides power combined with simplicity.
+The Hidden Notification Cost Trap: Existing market leaders charge merchants a premium per-message rate (typically 50 paise to ₹1) for WhatsApp and SMS alerts. For high-volume wholesale operations, this accumulates into a significant monthly liability. MyBizz-ERP offers zero-cost routing.
+The User-Locked Pricing Penalty: Most cloud platforms leverage "per-user, per-month" subscription models. As a retail store scales to three or four billing terminals, their technology costs triple. Our licensing operates on a flat-rate per physical store architecture.
+3. Unique Selling Propositions (USP)
+The Chameleon UI (Multi-Category Adaptive Interface): A unified platform hosted under a single domain. Upon onboarding, selecting 'Kirana Wholesaler' dynamically formats the layout for bulk billing, while switching to 'Salon' alters the entire interface into a service ledger and calendar grid.
+Zero-Cost WhatsApp Automation (₹0 Messaging): By natively bridging a localized background protocol (Baileys), store owners securely pair their existing device via a QR code. Invoices and collection sheets dispatch as 100% free attachments.
+Automated Past Due Embedding: Eliminates uncomfortable payment follow-up conversations. The platform queries historical ledgers and prints a dedicated summary segment directly onto the active receipt: "Previous Balance + Current Bill = Total Net Due."
+Data Purging Without Ledger Corruption: Addresses the data limits of growing operations. Store owners can clean up and archive thousands of historical line-item invoices to reclaim database space while keeping outstanding account balances and inventory histories intact.
+4. System Workflow & Operation
+Phase A: Onboarding & Business Selection
+The business owner lands on mybizz-erp.com and completes registration using a phone number or Google single-sign-on (SSO).
+The application presents a configuration screen: "Select Your Business Type."
+Choosing "Kirana Wholesaler" signals the backend architecture to initialize high-speed retail components, hiding service-specific layouts.
+Phase B: Real-Time Multi-Counter Billing Execution
+Cross-Terminal Inventory Synchronization: If a cashier on the Ground Floor (GF) files an invoice containing 10 units of an item, a terminal on the First Floor (FF) receives this data decrement within under 1 second via live system sockets without requiring a browser refresh. Row-locking protocols (SELECT FOR UPDATE) prevent double-selling of identical items.
+On-the-Fly Inventory Updates: If a new batch of stock arrives mid-rush, typing a quick macro (F4) drops down an instant product creation module. The user updates descriptions and customizes prices directly within the active invoice without losing their workspace.
+Silent Thermal Printing Engine: Pressing 'Enter' dispatches structured document payloads to a localized background daemon utility running on the terminal. The layout prints immediately to a 3-inch thermal printer in regional Marathi text, bypassing standard web print configuration popups.
+Phase C: Collection & Housekeeping
+As an invoice completes processing, a structured PDF automatically relays to the customer's WhatsApp line.
+At close-of-business, the owner triggers the bulk reminder routine. The engine queries outstanding records and broadcasts personalized billing statements to overdue accounts with a clean payment breakdown.
+5. Feature Specifications
+📦 Module 1: Kirana Wholesale Features
+Keyboard-Driven Checkout Layout: Rapid invoice entry using specialized navigation keys (Tab, Enter, Arrow Keys), eliminating mouse dependency during peak hours.
+Dynamic Variable Pricing: Allows point-of-sale cashiers to override product base rates instantly based on client profiling (e.g., standard retail walk-in vs. bulk trade buyers).
+Historical Price Tier Mapping: Automatically remembers previously negotiated rates for a specific customer, auto-populating old margins onto fresh orders.
+Hard Credit Limit Constraints: Temporarily locks transaction access if a customer's open debt passes a designated threshold (e.g., ₹50,000) until overridden by an administrator.
+First-In, First-Out (FIFO) Batch Controls: Flags items nearing expiration dates on the ledger interface to ensure perishable goods clear out first.
+Structural Database Archive Utility: Safely offloads bulky transaction records into CSV storage dumps while preserving historical customer balance totals.
+💇 Module 2: Salon & Service Features (Future Phase)
+Appointment Booking Grid: A clean calendar view designed to schedule and assign timed service windows during heavy weekend traffic.
+Stylist Commission Engine: Automatically maps technician assignments to selected billable treatments (e.g., Haircut) and calculates percentage split margins (e.g., 30%) inside a daily performance ledger.
+Service & Asset Cataloging: Swaps physical product SKUs out for custom treatment hours, minimizing unnecessary stock configuration fields.
+Customer Loyalty Tracker: Converts transaction values into redeemable token counts to incentivize repeat client engagement.
+6. Business Optimization & Financial Strategy
+Our platform maintains a disruptive positioning framework designed to capture domestic market share through localized support and simple pricing.
+Implementation & Setup Fee (One-Time): ₹20,000
+Includes: Legacy data translation (Excel migrations), physical configuration of localized 3-inch thermal printing arrays, and device WhatsApp gateway authentication.
+SaaS Infrastructure Fee (Recurring): ₹3,000 / Month
+Includes: End-to-end cloud workspace maintenance, continuous automated snapshot backups, and rolling feature upgrades. Because the WhatsApp integration bypasses paid APIs, this tier delivers high-margin predictable revenue.
+Organic Growth Referral Engine: Incentivizes local network sharing. If an active client introduces a neighboring business that signs up for the system, the platform rewards the referrer with 3 months of zero-cost subscription service. This cuts down outward advertising expenses.
+🛠️ TECHNICAL REQUIREMENT DOCUMENT (TRD)
+Project Name: MyBizz-ERP Backend & Database EngineArchitecture Type: Multi-Tenant Modular SaaS (Shared Database, Isolated Row Level Security)
+1. ⚙️ Technology Stack & Tool Selection
+Tool / Technology
+Where to Use?
+Responsibility (What)
+Core Technical Advantage (Why)
+Next.js 15 (App Router)
+Front-end & API Routes
+Managing the complete user interface (UI) and serverless backend API paths.
+Provides Server-Side Rendering (SSR) and PWA support to deliver offline-like native desktop speeds.
+Supabase (PostgreSQL)
+Cloud Database
+Master database storage, secure multi-tenant user authentication, and system events broadcasting.
+Built-in real-time engines over WebSockets ensure instantaneous data syncing between diverse checkout lanes (e.g., GF & FF counters).
+Baileys (Node.js)
+VPS / Cloud Server
+Maintaining standalone headless WhatsApp Web protocols to route PDF attachments and templates for free.
+Completely bypasses Meta's official per-message Cloud API premium fees, locking in a 100% net software profit margin.
+TanStack Query (React Query)
+Front-end State Management
+Client-side reactive state caching and intelligent background execution layers.
+Caches data structures locally. The invoicing window operates instantly without stalling for sequential database roundtrips.
+Node.js (Print Daemon)
+Client Machine (Local PC OS)
+Running as a lightweight background execution script on physical cash counters.
+Directly captures database network streams and triggers low-level command signals to raw 3-inch thermal printing arrays, bypassing web layout print modals.
+2. 🗄️ Relational Database Schema Design (ERD Explanation)
+To systematically operate a multi-tenant environment accommodating both Kirana Wholesalers (Inventory tracking + Open ledger debt) and Salons (Timed appointment reservations + Variable technician margins), the database architecture leverages Single-Table Extensibility paired with Polymorphic Event Relations.
+📐 Entity-Relationship Logic & Architectural Foundations
+Shops (The Tenant Root Node): The primary structural anchor. Every entry inside the infrastructure contains a foreign reference mapping back to this table. The critical discriminator attribute business_type ('wholesale' or 'salon') dictates how client-side data structures parse and render the application UI layout dynamically.
+Users (Staff / Access Identity Profiles): Maps authorization access control groups (roles like owner, billing_clerk, salon_stylist). For service verticals, this identity entity manages dynamic commission configurations used in daily payout calculations.
+Customers (The Consolidated Account Ledger): A cross-functional entity tracking dual identities. When processing under a wholesale scope, the system targets the current_due and credit_limit properties to throttle checkout permissions. Under a salon context, the application reads the loyalty_points register to calculate rewards.
+Products & Services (The Unified Catalog Matrix): Merges raw retail physical stock and abstract billable labor onto a uniform index. An evaluation check over the is_service boolean flag tells the internal inventory engine whether to bypass row-locking routines during checkout validation loops.
+Invoices & Invoice_Items (The Immutable Operational History): Tracks the direct details of processing events. These two tables operate independently from the live entity tables (products, customers), ensuring that transactional housekeeping runs without breaking existing historical totals.
+3. 💾 SQL Schema Blueprint (Supabase DDL Configuration)
+Execute the following database structure definition code blocks inside your Supabase SQL Editor workspace to instantiate your core tables:
+sql
+-- 1. SHOPS / TENANTS ROOT REFERENCE TABLE
+CREATE TABLE shops (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    business_type VARCHAR(50) NOT NULL, -- Evaluates: 'wholesale' OR 'salon'
+    whatsapp_session_status VARCHAR(50) DEFAULT 'DISCONNECTED',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- 2. USERS / ASSOCIATES TABLE (Tracks access privileges and variable compensation margins)
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL, -- Evaluates: 'owner', 'billing_clerk', 'salon_stylist'
+    commission_percentage NUMERIC(5,2) DEFAULT 0.00, -- Functional target for salon service logic only
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- 3. CUSTOMERS TABLE (Consolidated historical financial ledger index)
+CREATE TABLE customers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    current_due NUMERIC(12,2) DEFAULT 0.00, -- Live evaluation point for wholesale debt structures
+    loyalty_points INT DEFAULT 0, -- Functional evaluation point for salon incentive schemas
+    credit_limit NUMERIC(12,2) DEFAULT 50000.00, -- Maximum open debt margin allowed
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- 4. UNIFIED PRODUCTS & SERVICES MATRIX TABLE
+CREATE TABLE products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    sku_barcode VARCHAR(100),
+    is_service BOOLEAN DEFAULT FALSE, -- TRUE switches engine properties to asset labor, FALSE flags wholesale commodities
+    stock_quantity NUMERIC(10,2) DEFAULT 0.00, -- Active physical units scale evaluation property
+    base_price NUMERIC(10,2) NOT NULL, -- Master catalog valuation standard
+    expiry_date DATE, -- Perishable lot identification parameter
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- 5. INVOICES MASTER HEADERS TABLE
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    clerk_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    invoice_number SERIAL,
+    total_amount NUMERIC(10,2) NOT NULL,
+    past_due_included NUMERIC(10,2) DEFAULT 0.00, -- Captures customer balance snapshot at execution point
+    payment_mode VARCHAR(50) NOT NULL, -- Evaluates: 'CASH', 'UPI', 'CREDIT'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- 6. INVOICE LINE ITEMS DESCRIPTOR TABLE
+CREATE TABLE invoice_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id UUID REFERENCES invoices(id) ON DELETE CASCADE, -- Automated purging target without breaking customer states
+    product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+    quantity NUMERIC(10,2) NOT NULL,
+    sold_price NUMERIC(10,2) NOT NULL, -- Allows on-the-fly checkout catalog rate overrides
+    assigned_stylist_id UUID REFERENCES users(id) ON DELETE SET NULL -- Maps labor commission distribution lines
+);
+कोड का इस्तेमाल सावधानी से करें.
+4. 🔏 Data Purging Logic (Database Archiving Without Discrepancies)
+The Architectural Core: The platform decouples transaction records from balance state machines. When cashiers finalize an order, calculation routines run once to update the true states inside products.stock_quantity and customers.current_due.
+The underlying historical documents (invoices and invoice_items) serve exclusively as immutable audit receipts and visualization models.
+When a shop owner executes a database cleanup routine to drop thousands of past line items, the system removes records down the line from the invoices reference using a cascading delete tool (ON DELETE CASCADE).
+Because the parent parameters (current_due and stock_quantity) are isolated from historical changes or use safe fallback pointers (ON DELETE SET NULL), current ledger records experience 0% systemic distortion. Database sizes are minimized, response performance stays optimized, and open balances remain unchanged.
+5. ⚡ Real-Time Multi-Counter Synchronization Logic
+To ensure concurrent checkout actions on the same item index do not introduce racing state overlaps or inventory discrepancies across terminal connections (e.g., GF and FF lanes), the platform combines Supabase Realtime Broadcast Sockets with strict PostgreSQL Isolation Row Locks.
+A) Live State Updates (Next.js Client Components)
+The system attaches a real-time reactive event wrapper on checkout terminal connections to catch modifications to your database without using expensive browser reload loops:
+typescript
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+export default function BillingCounter({ shopId }) {
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    // 1. Initialize local cache from master product list state
+    fetchProducts();
+    // 2. Subscribe to transactional mutation broad-streams inside the target tenant boundaries
+    const stockChannel = supabase
+      .channel('live-stock-changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'products', filter: `shop_id=eq.${shopId}` },
+        (payload) => {
+          // Captures state mutation events from any transaction stream and updates the counter view within < 1 second
+          setProducts((prevItems) =>
+            prevItems.map((item) => (item.id === payload.new.id ? { ...item, stock_quantity: payload.new.stock_quantity } : item))
+          );
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(stockChannel);
+    };
+  }, [shopId]);
+  return (
+    <div>{/* The high-speed billing interface component parses and renders here */}</div>
+  );
+}
+कोड का इस्तेमाल सावधानी से करें.
+B) Preventing Stock Double-Selling Collisions (Row Locking Framework)
+When parallel terminals process execution signals down to the microsecond on the last available item lot, the backend engine processes the operation safely by invoking a protected database storage routine:
+sql
+CREATE OR REPLACE FUNCTION secure_billing_deduct(target_product_id UUID, req_qty NUMERIC)
+RETURNS BOOLEAN AS $$
+DECLARE
+    current_stock NUMERIC;
+BEGIN
+    -- 🔒 ROW LOCK INVOCATION: Isolate the matched record line from any alternative processing threads until transaction closes
+    SELECT stock_quantity INTO current_stock 
+    FROM products 
+    WHERE id = target_product_id FOR UPDATE;
+    -- Evaluate absolute quantity constraints against requested inventory amounts
+    IF current_stock >= req_qty THEN
+        UPDATE products 
+        SET stock_quantity = stock_quantity - req_qty 
+        WHERE id = target_product_id;
+        RETURN TRUE; -- Success conditions met, row constraints unlock and commit safely
+    ELSE
+        RETURN FALSE; -- Insufficient inventory state exception flagged, modifications roll back cleanly
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+Because we selected a tech stack using Next.js + Supabase + Baileys (Free WhatsApp Gateway), your operational overhead is incredibly low. Unlike other platforms that pay per message, your infrastructure cost will scale minimally, leaving you with very high profit margins.
+📊 1. Real Platform Infrastructure Expenses
+These are the actual, un-inflated costs of the platforms you will use. Vercel and Supabase have excellent free tiers to start.
+Tool / Platform
+Category
+Monthly Cost (At 10 Clients)
+Operational Logic / Reason
+Supabase (Database)
+Cloud Hosting
+$0 to $25 (~₹2,100)
+Free tier supports up to 50,000 users. Once your 10 clients accumulate deep historical data, you upgrade to the Pro Plan.
+VPS Server (Hostinger/DigitalOcean)
+Linux Server
+~₹1,200 / Month
+Required to host the Baileys Node.js instance. A server with 2 vCPUs and 4GB RAM can easily run 10 simultaneous WhatsApp QR web-sessions 24/7.
+Vercel / Netlify
+Frontend Hosting
+₹0 (Free Tier)
+Next.js frontend code hosts for free on Vercel's hobby tier because all database actions hit Supabase directly via API endpoints.
+Domain (GoDaddy/Hostinger)
+Branding
+~₹800 / Year
+One-time annual cost to purchase your master domain (e.g., mybizz-erp.com).
+📉 2. Phased Milestone Costing & Profit Matrix
+🚀 Phase 1: The 1st Client (Proof of Concept)
+Marketing & Ads Expense: ₹0 (This is your warm lead/existing wholesale client. Zero acquisition cost).
+Platform Expense: ₹0 (Utilizing Supabase Free Tier, Vercel Free Tier, and local machine development).
+Small Expenses (Misc): ₹1,000 (Local traveling to client site, printer alignment testing, tea/coffee).
+Total Initial Capital Outflow: ₹1,000
+💰 Gross Revenue: ₹20,000 (One-time Setup) + ₹3,000 (1st Month Maintenance) = ₹23,000
+📈 Net Profit: +₹22,000
+📈 Phase 2: Clients 2 to 5 (The Network Growth)
+Marketing & Ads Expense: ₹2,000 (Printing high-quality flyers/brochures to physically hand out in wholesale markets, or running targeted local Facebook/Instagram micro-ads for business owners).
+Platform Expense: ₹1,200 / Month (Activating the VPS Server to keep 5 continuous WhatsApp QR sync loops alive).
+Small Expenses (Misc): ₹2,000 (On-site implementation, barcode/thermal printer driver mapping across multiple terminals).
+Total Outflow for this Phase: ₹5,200
+💰 Gross Revenue (4 New Clients): Setup Fees (4 × ₹20,000 = ₹80,000) + Total Maintenance Pool (5 × ₹3,000 = ₹15,000) = ₹95,000
+📈 Net Profit: +₹89,800
+🔥 Phase 3: Clients 6 to 10 (The Scaling Phase)
+Marketing & Ads Expense: ₹5,000 (Slightly expanding local digital ad reach and accounting for the "3-Months Free Maintenance" referral discount given to clients who onboarded their friends).
+Platform Expense: ₹3,300 / Month (₹1,200 VPS + ₹2,100 Supabase Pro Plan activation due to 10 stores scaling up their line-item database size).
+Small Expenses (Misc): ₹3,000 (Occasional field traveling or hiring a local technician friend for quick printer deployment support).
+Total Outflow for this Phase: ₹11,300
+💰 Gross Revenue (5 New Clients): Setup Fees (5 × ₹20,000 = ₹1,00,000) + Total Maintenance Pool (10 × ₹3,000 = ₹30,000) = ₹1,30,000
+📈 Net Profit: +₹1,18,700
+🏆 3. Financial Summary After 10 Active Clients
+Once your 10th client is successfully onboarded, your micro-SaaS business converts into a highly predictable cash-flow positive machine running on autopilot:
+Total Collected Setup Revenue (10 × ₹20,000): ₹2,00,000 (Pure injection capital)
+Gross Monthly Recurring Revenue (10 × ₹3,000): ₹30,000 / Month
+Total Fixed Monthly Platform Overhead: ₹3,300 / Month
+💰 Net Monthly Passive Income (Net Profit): ₹26,700 / Month
+💡 Strategic Growth Hack to Maximize Margin
+Do not waste large sums on Google or Facebook Ads initially. Wholesale merchants are tight-knit groups; they attend trade associations and operate in the same physical market areas.
+Provide impeccable uptime and blazing-fast keyboard billing performance to your first 3 clients. Use your referral system ("Get 3 Months Free Maintenance per Referral") to let them pitch the software to neighboring shop owners for you. This turns your marketing budget to ₹0 and keeps your margins maximized!
