@@ -1,4 +1,5 @@
 import WholesaleSidebar from './WholesaleSidebar'
+import ClientMobileNav from './ClientMobileNav'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -19,9 +20,10 @@ export default async function WholesaleLayout({ children }: { children: React.Re
     return (
         <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">
             <WholesaleSidebar shopName={shop.shop_name} />
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto pb-16 md:pb-0 relative">
                 {children}
             </main>
+            <ClientMobileNav />
         </div>
     )
 }

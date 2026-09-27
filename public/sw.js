@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mybizz-erp-cache-v1';
+const CACHE_NAME = 'mybizz-erp-cache-v6.2';
 
 // The install handler takes care of precaching the resources we always need.
 self.addEventListener('install', event => {
@@ -66,4 +66,11 @@ self.addEventListener('fetch', event => {
             });
         })
     );
+});
+
+// Immediately assume control over incoming client updates natively
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });

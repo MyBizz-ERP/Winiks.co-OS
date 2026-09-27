@@ -6,7 +6,9 @@ import { ScrollText, Truck } from 'lucide-react'
 
 const NAV_ITEMS = [
     { href: '/erp/wholesale/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/erp/wholesale/reports', label: 'Day-End Reports', icon: '📈' },
     { href: '/erp/wholesale/pos', label: 'Point of Sale', icon: '⚡' },
+    { href: '/erp/wholesale/purchase-pos', label: 'Purchase (Kharedi)', icon: '📥' },
     { href: '/erp/wholesale/inventory', label: 'Inventory', icon: '📦' },
     { href: '/erp/wholesale/customers', label: 'Customers & Udhaari', icon: '👥' },
     { href: '/erp/wholesale/invoices', label: 'Sales History', icon: '🧾' },
@@ -18,7 +20,7 @@ export default function WholesaleSidebar({ shopName }: { shopName: string }) {
     const pathname = usePathname()
 
     return (
-        <aside className="w-64 bg-slate-900 text-white flex flex-col shrink-0 h-screen overflow-y-auto">
+        <aside className="w-64 bg-slate-900 text-white hidden md:flex flex-col shrink-0 h-screen overflow-y-auto">
             {/* Brand */}
             <div className="px-6 py-6 border-b border-slate-800">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Wholesale ERP</p>

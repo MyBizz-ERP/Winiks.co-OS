@@ -1,22 +1,14 @@
-import { uploadProductsCsv, uploadCustomersCsv, uploadSuppliersCsv } from './actions'
+import { uploadCustomersCsv } from './actions'
 import CsvUploaderCard from './CsvUploaderCard'
 import DangerZone from './DangerZone'
 import ClientGhostArchival from './ClientGhostArchival'
 
-// ─── CSV Template data (base64 encoded inline, no file server needed) ───
-const PRODUCTS_CSV = `Product Name,Name (Hindi) Optional,Name (Marathi) Optional,Barcode,Buy Price,Sell Price,Current Stock,Unit,Min Stock Alert
-Parle G Gold,पारले जी गोल्ड,पार्ले जी गोल्ड,PG100,10,12,50,PCS,5
-Tata Salt 1KG,टाटा नमक,टाटा मीठ,TS200,20,24,100,PCS,10
-Amul Butter 500g,,,AB500,110,130,30,PCS,5`
 
+// ─── CSV Template data (base64 encoded inline, no file server needed) ───
 const CUSTOMERS_CSV = `Customer Name,Phone,Udhaari Balance
 Ramesh Patil,9876543210,500
 Suresh Kale,9812345678,0
 Ganesh More,9999988888,1200`
-
-const SUPPLIERS_CSV = `Supplier Name,Phone,Company,Amount Owed
-Vikram Traders,9876540000,Vikram Wholesale,5000
-Metro Cash & Carry,1800222222,Metro,0`
 
 function toCsvHref(csv: string) {
     return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`
@@ -44,28 +36,12 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                     <CsvUploaderCard
-                        label="Product Catalog"
-                        description="Upload all your products with prices, barcodes, and stock levels"
-                        icon="📦"
-                        action={uploadProductsCsv}
-                        templateHref={toCsvHref(PRODUCTS_CSV)}
-                        templateName="winiks_products_template.csv"
-                    />
-                    <CsvUploaderCard
                         label="Customer List + Udhaari"
                         description="Import existing customers with their current outstanding balances"
                         icon="👥"
                         action={uploadCustomersCsv}
                         templateHref={toCsvHref(CUSTOMERS_CSV)}
                         templateName="winiks_customers_template.csv"
-                    />
-                    <CsvUploaderCard
-                        label="Supplier List"
-                        description="Import your vendors and their payable balances"
-                        icon="🏭"
-                        action={uploadSuppliersCsv}
-                        templateHref={toCsvHref(SUPPLIERS_CSV)}
-                        templateName="winiks_suppliers_template.csv"
                     />
                 </div>
             </section>

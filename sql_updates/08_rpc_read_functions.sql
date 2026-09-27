@@ -8,7 +8,7 @@
 -- Read products for the calling tenant
 CREATE OR REPLACE FUNCTION public.wh_get_products(p_shop_id UUID)
 RETURNS TABLE (
-  id UUID, name TEXT, barcode TEXT, buying_price NUMERIC,
+  id UUID, name TEXT, name_mr TEXT, barcode TEXT, buying_price NUMERIC,
   selling_price NUMERIC, current_stock NUMERIC, unit TEXT,
   min_stock_alert NUMERIC, created_at TIMESTAMPTZ
 )
@@ -18,7 +18,7 @@ SET search_path = public, wholesale
 AS $$
 BEGIN
   RETURN QUERY
-  SELECT p.id, p.name, p.barcode, p.buying_price,
+  SELECT p.id, p.name, p.name_mr, p.barcode, p.buying_price,
          p.selling_price, p.current_stock, p.unit,
          p.min_stock_alert, p.created_at
   FROM wholesale.products p
@@ -80,6 +80,31 @@ BEGIN
   DELETE FROM wholesale.customers WHERE shop_id = p_shop_id;
   DELETE FROM wholesale.suppliers WHERE shop_id = p_shop_id;
   DELETE FROM wholesale.products WHERE shop_id = p_shop_id;
+END;
+$$;
+
+-- ============================================================
+-- Read Purchase History for a specific product
+-- Returns the Audit Log (Eye Icon) securely bypassing RLS
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.wh_get_product_history(p_shop_id UUID, p_product_id UUID)
+RETURNS TABLE (
+  quantity NUMERIC, 
+  unit_cost NUMERIC, 
+  created_at TIMESTAMPTZ, 
+  supplier_name TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, wholesale
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT pi.quantity, pi.unit_cost, pb.created_at, pb.supplier_name
+  FROM wholesale.purchase_items pi
+  INNER JOIN wholesale.purchase_bills pb ON pb.id = pi.purchase_bill_id
+  WHERE pb.shop_id = p_shop_id AND pi.product_id = p_product_id
+  ORDER BY pb.created_at DESC;
 END;
 $$;
 

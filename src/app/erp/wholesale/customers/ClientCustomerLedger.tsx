@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Plus, Search, IndianRupee, X, Edit3 } from 'lucide-react'
+import { User, Plus, Search, IndianRupee, X, Edit3, Download } from 'lucide-react'
+import { exportToCSV } from '../utils/csvExport'
 import { addCustomer, recordLedgerPayment, editCustomer } from './actions'
 
 export default function ClientCustomerLedger({ initialCustomers }: { initialCustomers: any[] }) {
@@ -69,68 +70,78 @@ export default function ClientCustomerLedger({ initialCustomers }: { initialCust
                         className="pl-10 w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
                     />
                 </div>
-                <button
-                    onClick={() => setShowAddCustomer(true)}
-                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg shadow flex items-center gap-2 text-sm transition transition-transform active:scale-95"
-                >
-                    <Plus className="h-4 w-4" /> Add Customer
-                </button>
+                <div className="flex space-x-3 shrink-0">
+                    <button
+                        onClick={() => exportToCSV('customer_ledger.csv', filteredCustomers)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-lg shadow flex items-center gap-2 text-sm transition-transform active:scale-95"
+                    >
+                        <Download className="h-4 w-4" /> EXPORT CSV
+                    </button>
+                    <button
+                        onClick={() => setShowAddCustomer(true)}
+                        className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-5 rounded-lg shadow flex items-center gap-2 text-sm transition-transform active:scale-95"
+                    >
+                        <Plus className="h-4 w-4" /> Add Customer
+                    </button>
+                </div>
             </div>
 
             {/* Data Grid */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
-                        <tr>
-                            <th className="px-6 py-4">Customer Details</th>
-                            <th className="px-6 py-4">Phone Number</th>
-                            <th className="px-6 py-4 text-right">Outstanding Udhaari</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredCustomers.length > 0 ? filteredCustomers.map(customer => (
-                            <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <div className="font-bold text-slate-900">{customer.name}</div>
-                                </td>
-                                <td className="px-6 py-4 font-mono text-sm text-slate-600">
-                                    {customer.phone || 'N/A'}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    {customer.total_credit > 0 ? (
-                                        <span className="inline-block bg-red-50 text-red-700 px-3 py-1 rounded-md text-sm font-black border border-red-100 shadow-sm">
-                                            ₹ {customer.total_credit.toLocaleString()}
-                                        </span>
-                                    ) : (
-                                        <span className="text-emerald-600 font-bold text-sm">₹ 0</span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 text-right space-x-2">
-                                    <button
-                                        onClick={() => setSelectedEditTarget(customer)}
-                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2 rounded-lg transition shadow-sm inline-flex items-center"
-                                    >
-                                        <Edit3 className="w-3 h-3 mr-1" /> Edit
-                                    </button>
-                                    <button
-                                        disabled={customer.total_credit <= 0}
-                                        onClick={() => setSelectedPaymentTarget(customer)}
-                                        className="bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-sm"
-                                    >
-                                        Record Payment
-                                    </button>
-                                </td>
-                            </tr>
-                        )) : (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
+                <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left whitespace-nowrap min-w-[700px]">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
                             <tr>
-                                <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium">
-                                    No customers found.
-                                </td>
+                                <th className="px-6 py-4">Customer Details</th>
+                                <th className="px-6 py-4">Phone Number</th>
+                                <th className="px-6 py-4 text-right">Outstanding Udhaari</th>
+                                <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredCustomers.length > 0 ? filteredCustomers.map(customer => (
+                                <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="font-bold text-slate-900">{customer.name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono text-sm text-slate-600">
+                                        {customer.phone || 'N/A'}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {customer.total_credit > 0 ? (
+                                            <span className="inline-block bg-red-50 text-red-700 px-3 py-1 rounded-md text-sm font-black border border-red-100 shadow-sm">
+                                                ₹ {customer.total_credit.toLocaleString()}
+                                            </span>
+                                        ) : (
+                                            <span className="text-emerald-600 font-bold text-sm">₹ 0</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 text-right space-x-2">
+                                        <button
+                                            onClick={() => setSelectedEditTarget(customer)}
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2 rounded-lg transition shadow-sm inline-flex items-center"
+                                        >
+                                            <Edit3 className="w-3 h-3 mr-1" /> Edit
+                                        </button>
+                                        <button
+                                            disabled={customer.total_credit <= 0}
+                                            onClick={() => setSelectedPaymentTarget(customer)}
+                                            className="bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-sm"
+                                        >
+                                            Record Payment
+                                        </button>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium">
+                                        No customers found.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* RECORD PAYMENT MODAL */}

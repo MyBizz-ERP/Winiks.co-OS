@@ -2,8 +2,11 @@
 
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Search, Calendar, FileText, X, Printer, Eye } from 'lucide-react'
-import ReceiptPreview from '../pos/ReceiptPreview' // Reusing our bulletproof print layout!
+import { Search, Calendar, FileText, X, Printer, Eye, Trash2, Loader2, Download } from 'lucide-react'
+import ReceiptPreview from '../pos/ReceiptPreview'
+import { exportToCSV } from '../utils/csvExport'
+import { deleteSingleInvoiceAction } from './actions'
+import { useRouter } from 'next/navigation'
 
 export default function ClientSalesHistory({ initialInvoices, shopId, shopInfo }: { initialInvoices: any[], shopId: string, shopInfo: any }) {
     const [searchTerm, setSearchTerm] = useState('')
@@ -13,6 +16,9 @@ export default function ClientSalesHistory({ initialInvoices, shopId, shopInfo }
     const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
     const [invoiceItems, setInvoiceItems] = useState<any[]>([])
     const [loadingItems, setLoadingItems] = useState(false)
+
+    const router = useRouter()
+    const [deletingId, setDeletingId] = useState<string | null>(null)
 
     // Filter Logic
     const filteredInvoices = initialInvoices.filter(inv => {
@@ -47,6 +53,19 @@ export default function ClientSalesHistory({ initialInvoices, shopId, shopInfo }
         if (typeof window !== 'undefined') {
             window.print()
         }
+    }
+
+    async function handleDeleteBill(id: string) {
+        if (!confirm("Are you sure you want to permanently delete this bill? This will NOT affect Udhaari or Stock math.")) return;
+
+        setDeletingId(id)
+        const res = await deleteSingleInvoiceAction(id)
+        if (res.error) {
+            alert(res.error)
+        } else {
+            router.refresh()
+        }
+        setDeletingId(null)
     }
 
     return (
@@ -85,68 +104,86 @@ export default function ClientSalesHistory({ initialInvoices, shopId, shopInfo }
                         Clear Date Filter
                     </button>
                 )}
+
+                <button
+                    onClick={() => exportToCSV('sales_history_export.csv', filteredInvoices)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl shadow-sm flex items-center justify-center text-sm transition active:scale-95 whitespace-nowrap lg:ml-auto"
+                >
+                    <Download className="w-4 h-4 mr-2" /> EXPORT CSV
+                </button>
             </div>
 
             {/* Data Grid */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left whitespace-nowrap">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-black tracking-wider">
-                        <tr>
-                            <th className="px-6 py-4">Date & Time</th>
-                            <th className="px-6 py-4">Customer Name</th>
-                            <th className="px-6 py-4">Payment Mode</th>
-                            <th className="px-6 py-4 text-right">Added to Udhaari</th>
-                            <th className="px-6 py-4 text-right">Grand Total</th>
-                            <th className="px-6 py-4 text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredInvoices.length > 0 ? filteredInvoices.map(invoice => {
-                            const dateObj = new Date(invoice.created_at)
-                            return (
-                                <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="font-bold text-slate-900 text-sm">
-                                            {dateObj.toLocaleDateString('en-GB')}
-                                        </div>
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                            {dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 font-bold text-slate-800">
-                                        {invoice.customer_name || 'Walk-in Customer'}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="inline-block px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
-                                            {invoice.payment_mode === 'cash' ? 'CASH' : invoice.payment_mode}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right font-black text-amber-600">
-                                        {invoice.past_due > 0 ? `+ ₹${invoice.past_due}` : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 text-right font-black text-lg text-emerald-700 bg-emerald-50/30">
-                                        ₹ {invoice.grand_total.toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <button
-                                            onClick={() => viewInvoiceDetails(invoice)}
-                                            className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition shadow-sm"
-                                        >
-                                            <Eye className="w-5 h-5" />
-                                        </button>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden w-full">
+                <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left whitespace-nowrap min-w-[850px]">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-black tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4">Date & Time</th>
+                                <th className="px-6 py-4">Customer Name</th>
+                                <th className="px-6 py-4">Payment Mode</th>
+                                <th className="px-6 py-4 text-right">Added to Udhaari</th>
+                                <th className="px-6 py-4 text-right">Grand Total</th>
+                                <th className="px-6 py-4 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredInvoices.length > 0 ? filteredInvoices.map(invoice => {
+                                const dateObj = new Date(invoice.created_at)
+                                return (
+                                    <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="font-bold text-slate-900 text-sm">
+                                                {dateObj.toLocaleDateString('en-GB')}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                {dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-slate-800">
+                                            {invoice.customer_name || 'Walk-in Customer'}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="inline-block px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                                {invoice.payment_mode === 'cash' ? 'CASH' : invoice.payment_mode}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-amber-600">
+                                            {invoice.past_due > 0 ? `+ ₹${invoice.past_due}` : '-'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-black text-lg text-emerald-700 bg-emerald-50/30">
+                                            ₹ {invoice.grand_total.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex gap-2 justify-center">
+                                                <button
+                                                    onClick={() => viewInvoiceDetails(invoice)}
+                                                    className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition shadow-sm"
+                                                >
+                                                    <Eye className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteBill(invoice.id)}
+                                                    disabled={deletingId === invoice.id}
+                                                    className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition shadow-sm disabled:opacity-50"
+                                                >
+                                                    {deletingId === invoice.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            }) : (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-16 text-center text-slate-400 font-medium">
+                                        <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                        No sales history found for these filters.
                                     </td>
                                 </tr>
-                            )
-                        }) : (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-16 text-center text-slate-400 font-medium">
-                                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                    No sales history found for these filters.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* PREVIEW MODAL */}

@@ -64,7 +64,7 @@ export default async function InventoryPage() {
                 </div>
             ) : (
                 <>
-                    <ClientInventoryTable items={items} />
+                    <ClientInventoryTable items={items} shopId={shop.id} />
                 </>
             )}
         </div>

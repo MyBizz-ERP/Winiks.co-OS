@@ -55,14 +55,14 @@ export default function CsvUploaderCard({ label, description, icon, action, temp
                 </div>
             )}
 
-            <form ref={formRef} action={handleSubmit} className="flex items-center gap-3 mt-2">
+            <form ref={formRef} action={handleSubmit} className="flex flex-col sm:flex-row sm:items-center items-stretch gap-3 mt-2">
                 <input
                     type="file"
                     name="csv_file"
                     accept=".csv"
                     required
                     disabled={loading}
-                    className="flex-1 text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer transition"
+                    className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer transition"
                 />
                 <button
                     type="submit"

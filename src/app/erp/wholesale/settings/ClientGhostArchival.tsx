@@ -135,80 +135,84 @@ export default function ClientGhostArchival() {
                 <div className="flex-1 h-px bg-slate-200"></div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
-                <h3 className="font-bold text-amber-900 flex items-center space-x-2 mb-2">
+            <details className="bg-amber-50 border border-amber-200 rounded-2xl p-6 group">
+                <summary className="font-bold text-amber-900 flex items-center space-x-2 cursor-pointer list-none outline-none">
                     <span>🗄️</span>
                     <span>Export Bills (JSON Archive)</span>
-                </h3>
-                <p className="text-sm text-amber-800 font-medium mb-4 leading-relaxed">
-                    Export invoices for any date range as a <code className="bg-amber-100 px-1 rounded text-xs">.json</code> archive.
-                    After export you can safely delete the old bills from the system to keep it fast.
-                    <strong> Stock quantities and Udhaari balances are NEVER affected by this operation.</strong>
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl border border-amber-200 p-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-3">Export Bills</p>
+                    <span className="ml-auto text-amber-500 group-open:rotate-180 transition-transform">▼</span>
+                </summary>
 
-                        {message && (
-                            <div className="mb-3 p-2 bg-slate-50 text-xs font-bold text-slate-700 rounded border border-slate-200">
-                                {message}
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                    <p className="text-sm text-amber-800 font-medium mb-4 leading-relaxed">
+                        Export invoices for any date range as a <code className="bg-amber-100 px-1 rounded text-xs">.json</code> archive.
+                        After export you can safely delete the old bills from the system to keep it fast.
+                        <strong> Stock quantities and Udhaari balances are NEVER affected by this operation.</strong>
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white rounded-xl border border-amber-200 p-4">
+                            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-3">Export Bills</p>
+
+                            {message && (
+                                <div className="mb-3 p-2 bg-slate-50 text-xs font-bold text-slate-700 rounded border border-slate-200">
+                                    {message}
+                                </div>
+                            )}
+
+                            <div className="space-y-2 mb-3">
+                                <input
+                                    type="date"
+                                    value={fromDate}
+                                    onChange={(e) => setFromDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400"
+                                />
+                                <input
+                                    type="date"
+                                    value={toDate}
+                                    onChange={(e) => setToDate(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400"
+                                />
                             </div>
-                        )}
-
-                        <div className="space-y-2 mb-3">
-                            <input
-                                type="date"
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400"
-                            />
-                            <input
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-400"
-                            />
-                        </div>
-                        <div className="flex flex-col xl:flex-row gap-2">
-                            <button
-                                onClick={() => handleExport('csv')}
-                                disabled={isExporting}
-                                className="w-full bg-emerald-600 text-white text-[11px] font-black py-2.5 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
-                            >
-                                {isExporting ? 'PACKAGING...' : 'EXPORT EXCEL (CSV)'}
-                            </button>
-                            <button
-                                onClick={() => handleExport('json')}
-                                disabled={isExporting}
-                                className="w-full bg-slate-800 text-white text-[11px] font-black py-2.5 rounded-lg hover:bg-slate-900 transition disabled:opacity-50"
-                            >
-                                {isExporting ? 'PACKAGING...' : 'APP BACKUP (JSON)'}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-amber-200 p-4">
-                        <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-3">Re-import Archive</p>
-
-                        {importMessage && (
-                            <div className="mb-3 p-2 bg-slate-50 text-xs font-bold text-slate-700 rounded border border-slate-200">
-                                {importMessage}
+                            <div className="flex flex-col xl:flex-row gap-2">
+                                <button
+                                    onClick={() => handleExport('csv')}
+                                    disabled={isExporting}
+                                    className="w-full bg-emerald-600 text-white text-[11px] font-black py-2.5 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+                                >
+                                    {isExporting ? 'PACKAGING...' : 'EXPORT EXCEL (CSV)'}
+                                </button>
+                                <button
+                                    onClick={() => handleExport('json')}
+                                    disabled={isExporting}
+                                    className="w-full bg-slate-800 text-white text-[11px] font-black py-2.5 rounded-lg hover:bg-slate-900 transition disabled:opacity-50"
+                                >
+                                    {isExporting ? 'PACKAGING...' : 'APP BACKUP (JSON)'}
+                                </button>
                             </div>
-                        )}
+                        </div>
+                        <div className="bg-white rounded-xl border border-amber-200 p-4">
+                            <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-3">Re-import Archive</p>
 
-                        <p className="text-[11px] text-slate-500 mb-3 font-medium">Upload a previously exported .json file to restore it back into Sales History view. Will not affect Math.</p>
-                        <input
-                            type="file"
-                            accept=".json"
-                            onChange={handleImport}
-                            disabled={isImporting}
-                            className="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer mb-3"
-                        />
-                        <button disabled className="w-full bg-slate-200 text-slate-500 text-xs font-black py-2.5 rounded-lg opacity-50">
-                            {isImporting ? 'RESTORING DATA...' : 'SELECT FILE ABOVE'}
-                        </button>
+                            {importMessage && (
+                                <div className="mb-3 p-2 bg-slate-50 text-xs font-bold text-slate-700 rounded border border-slate-200">
+                                    {importMessage}
+                                </div>
+                            )}
+
+                            <p className="text-[11px] text-slate-500 mb-3 font-medium">Upload a previously exported .json file to restore it back into Sales History view. Will not affect Math.</p>
+                            <input
+                                type="file"
+                                accept=".json"
+                                onChange={handleImport}
+                                disabled={isImporting}
+                                className="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer mb-3"
+                            />
+                            <button disabled className="w-full bg-slate-200 text-slate-500 text-xs font-black py-2.5 rounded-lg opacity-50">
+                                {isImporting ? 'RESTORING DATA...' : 'SELECT FILE ABOVE'}
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </details>
         </section>
     )
 }

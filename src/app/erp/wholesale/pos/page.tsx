@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { openDB } from 'idb'
-import { User, X, Printer, MessageCircle, FileText, Eye } from 'lucide-react'
+import { User, X, Printer, MessageCircle, FileText, Eye, Loader2 } from 'lucide-react'
 import ReceiptPreview from './ReceiptPreview'
+import { useRouter } from 'next/navigation'
 
 // Next.js 15 requires async params
 export default function WholesalePOS() {
+    const router = useRouter()
     const [loading, setLoading] = useState(true)
     const [offline, setOffline] = useState(false)
     const [products, setProducts] = useState<any[]>([])
@@ -57,6 +59,17 @@ export default function WholesalePOS() {
                     const { data: shop } = await supabase.from('shops').select('id, shop_name, address, phone_number').eq('owner_id', user.id).single()
                     if (shop) {
                         setShopInfo(shop)
+
+                        // Sync Offline Queue First
+                        const pTx = db.transaction('pending_invoices', 'readwrite')
+                        const pending = await pTx.objectStore('pending_invoices').getAll()
+                        for (const inv of pending) {
+                            const { error } = await supabase.rpc('wh_complete_pos_transaction', inv.payload)
+                            if (!error) {
+                                const delTx = db.transaction('pending_invoices', 'readwrite')
+                                await delTx.objectStore('pending_invoices').delete(inv.local_id)
+                            }
+                        }
 
                         // Get fresh products and customers via RPC
                         const { data: pData } = await supabase.rpc('wh_get_products', { p_shop_id: shop.id })
@@ -189,8 +202,7 @@ export default function WholesalePOS() {
         const paid = amountReceived ? parseFloat(amountReceived) : netPayable
         const newUdhaariAdded = Math.max(0, netPayable - paid)
 
-        const supabase = createClient()
-        const { data: invoiceId, error } = await supabase.rpc('wh_complete_pos_transaction', {
+        const payload = {
             p_shop_id: shopInfo.id,
             p_customer_id: selectedCustomer?.id || null,
             p_customer_name: selectedCustomer?.name || 'Walk-in Cash Sale',
@@ -201,16 +213,27 @@ export default function WholesalePOS() {
             p_new_due_added: newUdhaariAdded,
             p_payment_mode: paid >= netPayable ? 'cash' : (paid > 0 ? 'partial' : 'udhaari'),
             p_cart: cart
-        })
-
-        if (error) {
-            console.error(error)
-            alert("Database Error! Stock unchanged. Please run the SQL Transaction script.")
-            setIsProcessing(false)
-            return
         }
 
+        const supabase = createClient()
         const db = await openDB('winiks_pos', 1)
+
+        let shouldProcessLocalMath = true
+
+        if (navigator.onLine) {
+            const { error } = await supabase.rpc('wh_complete_pos_transaction', payload)
+            if (error) {
+                console.error("Database Sync Failed. Saving to offline queue.", error)
+                await db.put('pending_invoices', { payload, created_at: new Date().toISOString() })
+                setOffline(true)
+            }
+        } else {
+            console.warn("Device is offline. Transaction saved safely to local queue.")
+            await db.put('pending_invoices', { payload, created_at: new Date().toISOString() })
+            setOffline(true)
+        }
+
+        // Complete the Local Math so UI updates instantly even if offline!
         const tx = db.transaction(['products', 'customers'], 'readwrite')
         const pStore = tx.objectStore('products')
         for (const item of cart) {
@@ -240,8 +263,18 @@ export default function WholesalePOS() {
             }, 300)
         } else if (modeToRun === 'whatsapp') {
             const dueText = newUdhaariAdded > 0 ? `\nNew Udhaari Added: Rs.${newUdhaariAdded}\nTotal Outstanding: Rs.${oldDue + newUdhaariAdded}` : ''
-            const text = `*New Invoice from ${shopInfo?.shop_name || 'MyBizz'}*\nTotal Amount: Rs.${netPayable}\nAmount Paid: Rs.${paid}${dueText}\nThank you!`
-            const url = `https://wa.me/?text=${encodeURIComponent(text)}`
+            const reviewText = shopInfo?.google_review_link ? `\n\n⭐ Kindly leave us a 5-Star Google Review here:\n${shopInfo.google_review_link}` : ''
+            const text = `*New Invoice from ${shopInfo?.shop_name || 'MyBizz'}*\n\nTotal Amount: Rs.${netPayable}\nAmount Paid: Rs.${paid}${dueText}\n\nThank you for your business!${reviewText}`
+
+            // Format phone to 91XXXXXXXXXX
+            let phoneParam = ''
+            if (selectedCustomer?.phone) {
+                let cleaned = selectedCustomer.phone.replace(/\D/g, '')
+                if (cleaned.length === 10) cleaned = '91' + cleaned
+                phoneParam = cleaned
+            }
+
+            const url = `https://wa.me/${phoneParam}?text=${encodeURIComponent(text)}`
             window.open(url, '_blank')
             resetCheckout()
         }
@@ -253,6 +286,8 @@ export default function WholesalePOS() {
         setAmountReceived('')
         localStorage.removeItem('mybizz_pos_cart')
         localStorage.removeItem('mybizz_pos_cust')
+
+        router.refresh() // Invalidate Next.js Server Cache so Dashboards auto-update
         setIsProcessing(false)
 
         setTimeout(async () => {
@@ -285,7 +320,10 @@ export default function WholesalePOS() {
             return [...prev, {
                 product_id: product.id,
                 name: product.name,
+                name_mr: product.name_mr,
+                name_hi: product.name_hi,
                 price: Number(product.selling_price),
+                buy_rate: Number(product.buying_price),
                 qty: 1,
                 total: Number(product.selling_price),
                 unit: product.unit
@@ -316,10 +354,10 @@ export default function WholesalePOS() {
     const grandTotal = cart.reduce((sum, item) => sum + item.total, 0)
 
     return (
-        <div className="flex h-screen w-full bg-slate-100 overflow-hidden font-sans">
+        <div className="flex flex-col lg:flex-row h-screen w-full bg-slate-100 overflow-y-auto lg:overflow-hidden font-sans">
 
             {/* LEFT: CART & SEARCH LIST */}
-            <div className="flex-1 flex flex-col m-4 bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="flex-1 flex flex-col lg:m-4 bg-white border border-slate-200 lg:rounded-3xl shadow-sm overflow-hidden min-h-[500px]">
 
                 {/* Search Bar Area */}
                 <div className="p-4 border-b border-slate-100 bg-white">
@@ -430,7 +468,7 @@ export default function WholesalePOS() {
             </div>
 
             {/* RIGHT: CHECKOUT PANEL */}
-            <div className="w-96 bg-white flex flex-col shadow-inner">
+            <div className="w-full lg:w-96 bg-white flex flex-col shadow-inner border-t lg:border-t-0 lg:border-l border-slate-200">
 
                 {/* Status Tracker */}
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -530,7 +568,7 @@ export default function WholesalePOS() {
             </div>
 
             {/* Right Panel: Advanced Checkout Hub (Fintech Theme) */}
-            <div className="w-[450px] bg-white border border-slate-200 flex flex-col shadow-2xl z-10 m-4 ml-0 rounded-3xl overflow-hidden">
+            <div className="w-full lg:w-[450px] bg-white border border-slate-200 flex flex-col shadow-2xl z-10 m-0 lg:m-4 lg:ml-0 rounded-none lg:rounded-3xl overflow-hidden shrink-0">
 
                 {/* Total Display & Actions */}
                 <div className="p-6 bg-slate-50 text-slate-800 flex-1 flex flex-col justify-start overflow-y-auto">
@@ -643,7 +681,14 @@ export default function WholesalePOS() {
                             onClick={() => handleCheckout()}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-600/20 transition tracking-widest text-lg flex items-center justify-center space-x-2 disabled:opacity-50"
                         >
-                            <span>{isProcessing ? "PROCESSING..." : "COMPLETE SALE (F10)"}</span>
+                            {isProcessing ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>PROCESSING...</span>
+                                </>
+                            ) : (
+                                <span>COMPLETE SALE (F10)</span>
+                            )}
                         </button>
                     </div>
                 </div>

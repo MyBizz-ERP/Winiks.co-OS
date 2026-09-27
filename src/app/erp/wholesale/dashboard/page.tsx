@@ -1,7 +1,8 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
-export default async function WholesaleDashboard() {
+export default async function WholesaleDashboard(props: { searchParams: Promise<{ date?: string }> }) {
+    const searchParams = await props.searchParams
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
@@ -21,17 +22,23 @@ export default async function WholesaleDashboard() {
     const customers = customersRes.data || []
     const invoices = invoicesRes.data || []
 
+    const targetDate = searchParams.date || new Date().toISOString().split('T')[0]
+
     const lowStockItems = products.filter((p: any) => Number(p.current_stock) <= Number(p.min_stock_alert))
     const totalUdhaari = customers.reduce((sum: number, c: any) => sum + Number(c.total_credit), 0)
     const todaySales = invoices
-        .filter((inv: any) => new Date(inv.created_at).toDateString() === new Date().toDateString())
+        .filter((inv: any) => new Date(inv.created_at).toISOString().startsWith(targetDate))
         .reduce((sum: number, inv: any) => sum + Number(inv.grand_total), 0)
+
+    const suppliers = await supabase.from('suppliers').select('*').eq('shop_id', shop.id)
+    const suppliersList = suppliers.data || []
+    const totalDen = suppliersList.reduce((sum: number, s: any) => sum + Number(s.total_payable), 0)
 
     const stats = [
         { label: "Today's Revenue", value: `₹${todaySales.toLocaleString('en-IN')}`, sub: 'Collected Today', color: 'bg-emerald-50 border-emerald-200', textColor: 'text-emerald-700' },
         { label: 'Total Udhaari Due', value: `₹${totalUdhaari.toLocaleString('en-IN')}`, sub: `${customers.filter((c: any) => c.total_credit > 0).length} debtors`, color: 'bg-amber-50 border-amber-200', textColor: 'text-amber-700' },
-        { label: 'Catalog Size', value: products.length, sub: 'Unique products', color: 'bg-blue-50 border-blue-200', textColor: 'text-blue-700' },
-        { label: 'Low Stock Alerts', value: lowStockItems.length, sub: 'Needs reordering', color: lowStockItems.length > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200', textColor: lowStockItems.length > 0 ? 'text-red-600' : 'text-slate-600' },
+        { label: 'Total Den (Payable)', value: `₹${totalDen.toLocaleString('en-IN')}`, sub: `${suppliersList.filter((s: any) => s.total_payable > 0).length} suppliers`, color: 'bg-rose-50 border-rose-200', textColor: 'text-rose-700' },
+        { label: 'Catalog Size', value: products.length, sub: 'Unique products', color: 'bg-blue-50 border-blue-200', textColor: 'text-blue-700' }
     ]
 
     return (
@@ -71,31 +78,6 @@ export default async function WholesaleDashboard() {
                     ))}
                 </div>
             </div>
-
-            {/* Recent Invoices */}
-            {invoices.length > 0 && (
-                <div>
-                    <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Recent Bills</h2>
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <table className="w-full">
-                            <thead className="bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-400 tracking-wider">
-                                <tr>
-                                    <th className="px-6 py-3 text-left">Date</th>
-                                    <th className="px-6 py-3 text-left">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {invoices.map((inv: any) => (
-                                    <tr key={inv.grand_total} className="hover:bg-slate-50 transition">
-                                        <td className="px-6 py-4 text-sm text-slate-600 font-medium">{new Date(inv.created_at).toLocaleString('en-IN')}</td>
-                                        <td className="px-6 py-4 font-bold text-slate-800">₹{Number(inv.grand_total).toLocaleString('en-IN')}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
