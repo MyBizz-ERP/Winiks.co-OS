@@ -1,72 +1,38 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
-import CsvUploader from './CsvUploader'
-import ClientInventoryTable from './ClientInventoryTable'
+import { getInventory } from "./actions"
+import { InventoryClient } from "./components/InventoryClient"
 
 export default async function InventoryPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
+    const response = await getInventory()
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) redirect('/login')
-
-    // Fetch via RPC (bypasses schema restriction)
-    const { data: products } = await supabase.rpc('wh_get_products', { p_shop_id: shop.id })
-
-    const items = products || []
-    const totalValue = items.reduce((sum: number, p: any) => sum + (Number(p.current_stock) * Number(p.buying_price)), 0)
-    const lowStockCount = items.filter((p: any) => Number(p.current_stock) <= Number(p.min_stock_alert)).length
-
-    const templateCsv = `Product Name,Barcode,Buy Price,Sell Price,Current Stock,Unit,Min Stock Alert\nParle G Gold,PG100,10,12,50,PCS,5\nTata Salt 1KG,TS200,20,24,100,PCS,10\n`
+    if (!response.success) {
+        return (
+            <div className="flex h-full items-center justify-center fade-in animate-in duration-500">
+                <div className="p-8 bg-rose-50/80 border border-rose-100 rounded-2xl text-rose-600 max-w-lg text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-sm">
+                    <p className="font-semibold text-lg mb-2">Architectural Lockout</p>
+                    <p className="text-sm opacity-90">{response.error}</p>
+                </div>
+            </div>
+        )
+    }
 
     return (
-        <div className="p-8 h-full overflow-y-auto w-full animate-in fade-in duration-500">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div className="flex flex-col h-full space-y-8 fade-in animate-in duration-1000 relative">
+
+            {/* Ambient Background Glow matching Layout */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
+
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 z-10">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Master Inventory</h1>
-                    <p className="text-slate-500 mt-1 font-medium">{items.length} products in your catalog</p>
-                </div>
-                <a
-                    href={`data:text/csv;charset=utf-8,${encodeURIComponent(templateCsv)}`}
-                    download="winiks_products_template.csv"
-                    className="bg-white text-slate-700 border border-slate-200 px-5 py-2.5 rounded-lg font-bold shadow-sm hover:bg-slate-50 flex items-center space-x-2 transition text-sm"
-                >
-                    <span>⬇️</span><span>Download Template</span>
-                </a>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Products</p>
-                    <p className="text-4xl font-black text-slate-800 tracking-tight mt-1">{items.length}</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Capital Invested</p>
-                    <p className="text-3xl font-black text-slate-800 tracking-tight mt-1">₹{totalValue.toLocaleString('en-IN')}</p>
-                </div>
-                <div className={`p-5 rounded-2xl border shadow-sm ${lowStockCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-widest ${lowStockCount > 0 ? 'text-red-400' : 'text-slate-400'}`}>Low Stock Alerts</p>
-                    <p className={`text-4xl font-black tracking-tight mt-1 ${lowStockCount > 0 ? 'text-red-600 animate-pulse' : 'text-slate-800'}`}>{lowStockCount}</p>
+                    <h1 className="text-[32px] font-bold tracking-tight text-slate-900 leading-tight">Inventory Matrix</h1>
+                    <p className="text-[15px] text-slate-500 mt-1 max-w-xl leading-relaxed">
+                        Centrally manage your wholesale stock nodes, strict pricing tiers, and regional linguistic boundaries at scale.
+                    </p>
                 </div>
             </div>
 
-            {items.length === 0 ? (
-                <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-16 text-center flex flex-col items-center">
-                    <div className="text-6xl mb-6">📦</div>
-                    <h3 className="text-xl font-extrabold text-slate-800 mb-2">Catalog Empty</h3>
-                    <p className="text-slate-400 text-sm mb-6">Go to Settings → Import your products CSV to get started.</p>
-                    <a href="/erp/wholesale/settings" className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition">
-                        Go to Settings →
-                    </a>
-                </div>
-            ) : (
-                <>
-                    <ClientInventoryTable items={items} shopId={shop.id} />
-                </>
-            )}
+            <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden transition-all shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)] z-10 relative">
+                <InventoryClient initialData={response.data || []} />
+            </div>
         </div>
     )
 }

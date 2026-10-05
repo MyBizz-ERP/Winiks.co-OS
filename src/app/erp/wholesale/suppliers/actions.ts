@@ -1,102 +1,86 @@
-'use server'
+﻿'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { db } from '@/db'
+import { shops, suppliers } from '@/db/schema'
+import { eq, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { createClient } from '@/utils/supabase/server'
 
-export async function addSupplier(formData: FormData) {
+// Strictly extracts the cryptographically isolated Tenant UUID based on Auth Token
+async function requireTenantLock() {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Unauthorized' }
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) throw new Error("CRITICAL_LOCK: Unauthorized execution.")
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
-
-    const name = formData.get('name') as string
-    const phone = formData.get('phone') as string
-    const company = formData.get('company') as string
-    const total_payable_str = formData.get('total_payable') as string
-
-    if (!name || name.trim() === '') return { error: 'Supplier Name is required' }
-
-    const total_payable = total_payable_str ? parseFloat(total_payable_str) : 0
-
-    const { error } = await supabase.rpc('wh_add_supplier', {
-        p_shop_id: shop.id,
-        p_name: name,
-        p_phone: phone || null,
-        p_company: company || null,
-        p_total_payable: total_payable
-    })
-
-    if (error) {
-        console.error("Add supplier error:", error)
-        return { error: 'Failed to add supplier: ' + error.message }
-    }
-
-    revalidatePath('/erp/wholesale/suppliers')
-    return { success: true }
+    const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.owner_id, authData.user.id))
+    if (!shop) throw new Error("CRITICAL_LOCK: Tenant isolation boundary violation.")
+    return shop.id
 }
 
-export async function editSupplier(formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Unauthorized' }
+export async function createSupplier(formData: FormData) {
+    const shopId = await requireTenantLock()
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
+    const name = formData.get('name')?.toString()
+    const phone = formData.get('phone')?.toString() || null
+    const oldBalanceStr = formData.get('current_balance')?.toString() || "0"
 
-    const id = formData.get('id') as string
-    const name = formData.get('name') as string
-    const phone = formData.get('phone') as string
-    const company = formData.get('company') as string
-    const total_payable_str = formData.get('total_payable') as string
+    if (!name) throw new Error("Supplier name is mathematically required.")
 
-    if (!id || !name || name.trim() === '') return { error: 'Invalid data' }
-
-    const total_payable = total_payable_str ? parseFloat(total_payable_str) : 0
-
-    const { error } = await supabase.rpc('wh_edit_supplier', {
-        p_shop_id: shop.id,
-        p_supplier_id: id,
-        p_name: name,
-        p_phone: phone || null,
-        p_company: company || null,
-        p_total_payable: total_payable
-    })
-
-    if (error) {
-        return { error: 'Failed to update supplier: ' + error.message }
+    try {
+        await db.insert(suppliers).values({
+            shop_id: shopId,
+            name,
+            phone,
+            current_balance: oldBalanceStr
+        })
+    } catch (e: any) {
+        console.error(e)
+        throw new Error("Failed to materialize supplier payload.")
     }
-
     revalidatePath('/erp/wholesale/suppliers')
-    return { success: true }
 }
 
-export async function commitPurchaseBill(payload: any) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Unauthorized' }
+export async function deleteSupplier(supplierId: string) {
+    const shopId = await requireTenantLock()
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
-
-    // payload includes { supplier_id (optional), supplier_name, subtotal, payment_mode, notes, items }
-    const { error } = await supabase.rpc('wh_commit_purchase_bill', {
-        p_shop_id: shop.id,
-        p_supplier_id: payload.supplier_id || null,
-        p_supplier_name: payload.supplier_name,
-        p_subtotal: payload.subtotal,
-        p_payment_mode: payload.payment_mode || 'cash',
-        p_notes: payload.notes || null,
-        p_items: payload.items
-    })
-
-    if (error) {
-        console.error("Purchase bill error:", error)
-        return { error: 'Failed to commit purchase: ' + error.message }
+    try {
+        await db.delete(suppliers)
+            .where(and(
+                eq(suppliers.id, supplierId),
+                eq(suppliers.shop_id, shopId) // Double lock ensures you only delete your own suppliers
+            ))
+    } catch (e: any) {
+        console.error(e)
+        throw new Error("Failed to delete supplier payload.")
     }
-
     revalidatePath('/erp/wholesale/suppliers')
-    revalidatePath('/erp/wholesale/inventory')
-    return { success: true }
 }
+
+export async function updateSupplier(supplierId: string, formData: FormData) {
+    const shopId = await requireTenantLock()
+
+    const name = formData.get('name')?.toString()
+    const phone = formData.get('phone')?.toString() || null
+    const oldBalanceStr = formData.get('current_balance')?.toString() || '0'
+
+    if (!name) throw new Error('Supplier name is mathematically required.')
+
+    try {
+        await db.update(suppliers)
+            .set({
+                name,
+                phone,
+                current_balance: oldBalanceStr
+            })
+            .where(and(
+                eq(suppliers.id, supplierId),
+                eq(suppliers.shop_id, shopId)
+            ))
+    } catch (e: any) {
+        console.error(e)
+        throw new Error('Failed to formally update supplier.')
+    }
+    revalidatePath('/erp/wholesale/suppliers')
+    revalidatePath('/erp/wholesale/udhaari')
+}
+

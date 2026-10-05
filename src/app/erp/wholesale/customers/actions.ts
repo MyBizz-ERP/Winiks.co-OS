@@ -1,109 +1,86 @@
-'use server'
+﻿'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { db } from '@/db'
+import { shops, customers } from '@/db/schema'
+import { eq, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { createClient } from '@/utils/supabase/server'
 
-export async function addCustomer(formData: FormData) {
+// Strictly extracts the cryptographically isolated Tenant UUID based on Auth Token
+async function requireTenantLock() {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) throw new Error("CRITICAL_LOCK: Unauthorized execution.")
 
-    if (!user) return { error: 'Unauthorized' }
-
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
-
-    const name = formData.get('name') as string
-    const phone_number = formData.get('phone_number') as string
-    const total_credit_str = formData.get('total_credit') as string
-
-    if (!name || name.trim() === '') return { error: 'Customer Name is required' }
-
-    const total_credit = total_credit_str ? parseFloat(total_credit_str) : 0
-
-    const { error: insertError } = await supabase.rpc('wh_add_customer', {
-        p_shop_id: shop.id,
-        p_name: name,
-        p_phone: phone_number || null,
-        p_total_credit: total_credit
-    })
-
-    if (insertError) {
-        console.error("Add customer error:", insertError)
-        return { error: 'Failed to add customer: ' + insertError.message }
-    }
-
-    revalidatePath('/erp/wholesale/customers')
-    return { success: true }
+    const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.owner_id, authData.user.id))
+    if (!shop) throw new Error("CRITICAL_LOCK: Tenant isolation boundary violation.")
+    return shop.id
 }
 
-export async function recordLedgerPayment(formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function createCustomer(formData: FormData) {
+    const shopId = await requireTenantLock()
 
-    if (!user) return { error: 'Unauthorized' }
+    const name = formData.get('name')?.toString()
+    const phone = formData.get('phone')?.toString() || null
+    const oldBalanceStr = formData.get('old_balance')?.toString() || "0"
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
+    if (!name) throw new Error("Customer name is mathematically required.")
 
-    const customer_id = formData.get('customer_id') as string
-    const amount_paid_str = formData.get('amount_paid') as string
-    const payment_mode = formData.get('payment_mode') as string || 'cash'
-    const notes = formData.get('notes') as string
-
-    if (!customer_id || !amount_paid_str) return { error: 'Missing required inputs' }
-
-    const amount_paid = parseFloat(amount_paid_str)
-    if (amount_paid <= 0) return { error: 'Amount must be greater than zero' }
-
-    const { error: rpcError } = await supabase.rpc('wh_record_udhaari_payment', {
-        p_shop_id: shop.id,
-        p_customer_id: customer_id,
-        p_amount_paid: amount_paid,
-        p_payment_mode: payment_mode,
-        p_notes: notes || null
-    })
-
-    if (rpcError) {
-        console.error("Ledger payment error:", rpcError)
-        return { error: 'Failed to record payment' }
+    try {
+        await db.insert(customers).values({
+            shop_id: shopId,
+            name,
+            phone,
+            old_balance: oldBalanceStr
+        })
+    } catch (e: any) {
+        console.error(e)
+        throw new Error("Failed to materialize customer payload.")
     }
-
     revalidatePath('/erp/wholesale/customers')
-    return { success: true }
 }
 
-export async function editCustomer(formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function deleteCustomer(customerId: string) {
+    const shopId = await requireTenantLock()
 
-    if (!user) return { error: 'Unauthorized' }
-
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
-
-    const customer_id = formData.get('id') as string
-    const name = formData.get('name') as string
-    const phone_number = formData.get('phone_number') as string
-    const total_credit_str = formData.get('total_credit') as string
-
-    if (!customer_id) return { error: 'Customer ID missing' }
-    if (!name || name.trim() === '') return { error: 'Customer Name is required' }
-
-    const total_credit = total_credit_str ? parseFloat(total_credit_str) : 0
-
-    const { error: updateError } = await supabase.rpc('wh_edit_customer', {
-        p_shop_id: shop.id,
-        p_customer_id: customer_id,
-        p_name: name,
-        p_phone: phone_number || null,
-        p_total_credit: total_credit
-    })
-
-    if (updateError) {
-        console.error("Edit customer error:", updateError)
-        return { error: 'Failed to update customer: ' + updateError.message }
+    try {
+        await db.delete(customers)
+            .where(and(
+                eq(customers.id, customerId),
+                eq(customers.shop_id, shopId) // Double lock ensures you only delete your own customers
+            ))
+    } catch (e: any) {
+        console.error(e)
+        throw new Error("Failed to delete customer payload.")
     }
-
     revalidatePath('/erp/wholesale/customers')
-    return { success: true }
 }
+
+export async function updateCustomer(customerId: string, formData: FormData) {
+    const shopId = await requireTenantLock()
+
+    const name = formData.get('name')?.toString()
+    const phone = formData.get('phone')?.toString() || null
+    const oldBalanceStr = formData.get('old_balance')?.toString() || '0'
+
+    if (!name) throw new Error('Customer name is mathematically required.')
+
+    try {
+        await db.update(customers)
+            .set({
+                name,
+                phone,
+                old_balance: oldBalanceStr
+            })
+            .where(and(
+                eq(customers.id, customerId),
+                eq(customers.shop_id, shopId)
+            ))
+    } catch (e: any) {
+        console.error(e)
+        throw new Error('Failed to formally update customer.')
+    }
+    revalidatePath('/erp/wholesale/customers')
+    revalidatePath('/erp/wholesale/udhaari')
+}
+

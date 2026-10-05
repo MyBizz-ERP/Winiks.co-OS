@@ -1,104 +1,120 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-import { supabaseAdmin } from '@/utils/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { db } from "@/db"
+import { products, purchaseItems, purchaseBills, suppliers } from "@/db/schema/wholesale"
+import { shops } from "@/db/schema/admin"
+import { createClient } from "@/utils/supabase/server"
+import { eq, desc } from "drizzle-orm"
+import { revalidatePath } from "next/cache"
 
-export async function uploadInventoryCsv(formData: FormData) {
-    const file = formData.get('csv_file') as File
-    if (!file || file.size === 0) return { error: 'No file uploaded' }
-
-    // 1. Verify Tenant Identity
+// High-Security Tenant Resolution Layer
+async function getActiveShopId() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Unauthorized Security Breach' }
+    if (!user) throw new Error("Unauthorized Access")
 
-    // 2. Fetch Verified Shop Access
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Tenant record not found' }
+    const shopRecord = await db.select().from(shops).where(eq(shops.owner_id, user.id)).limit(1)
+    if (!shopRecord || shopRecord.length === 0) {
+        throw new Error("No active shop found for this tenant")
+    }
+    return shopRecord[0].id
+}
 
+export async function getInventory() {
     try {
-        const text = await file.text()
+        const shopId = await getActiveShopId()
+        const inventory = await db.select()
+            .from(products)
+            .where(eq(products.shop_id, shopId))
+            .orderBy(desc(products.created_at))
 
-        // Parse generic CSV respecting newlines
-        const rows = text.split('\n').map(row => row.trim()).filter(row => row.length > 0)
-
-        const productsToInsert = []
-
-        // Loop mapping to the template: Name,Barcode,BuyPrice,SellPrice,Stock,Unit,MinAlert
-        // Starting at 1 to skip the Header row!
-        for (let i = 1; i < rows.length; i++) {
-            const columns = rows[i].split(',')
-            if (columns.length >= 7) {
-                productsToInsert.push({
-                    shop_id: shop.id, // Strictly locking the inventory to this specific owner
-                    name: columns[0].replace(/"/g, '').trim(),
-                    barcode: columns[1].replace(/"/g, '').trim() || `GEN-${Date.now()}-${i}`,
-                    buying_price: parseFloat(columns[2]) || 0,
-                    selling_price: parseFloat(columns[3]) || 0,
-                    current_stock: parseFloat(columns[4]) || 0,
-                    unit: columns[5].replace(/"/g, '').trim().toUpperCase() || 'PCS',
-                    min_stock_alert: parseFloat(columns[6]) || 5
-                })
-            }
-        }
-
-        if (productsToInsert.length === 0) return { error: 'No valid products could be extracted.' }
-
-        // 3. Batch Insert into the strictly isolated `wholesale` Database Space
-        // Using Admin Bypasser because RLS on cross-schema table insertion can sometimes throw edge-case errors before policies are perfectly tuned. The Tenant lock is enforced directly by `shop_id` mapped from auth in Step 2.
-        const { error: insertError } = await supabaseAdmin.schema('wholesale').from('products').insert(productsToInsert)
-
-        if (insertError) {
-            console.error("Database Injection Error:", insertError)
-            return { error: 'Failed to inject payload into database.' }
-        }
-
-        // Standardize cache reload
-        revalidatePath('/erp/wholesale/inventory')
-        return { success: true }
-
-    } catch (err) {
-        console.error(err)
-        return { error: 'Processing crash. Unreadable template format.' }
+        return { success: true, data: inventory }
+    } catch (error: any) {
+        return { success: false, error: error.message }
     }
 }
 
 export async function addProduct(formData: FormData) {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    try {
+        const shopId = await getActiveShopId()
 
-    if (!user) return { error: 'Unauthorized' }
+        const name = formData.get("name") as string
+        const name_mr = formData.get("name_mr") as string
+        const buy_rate = formData.get("buy_rate") ? parseFloat(formData.get("buy_rate") as string) : 0
+        const sell_rate = formData.get("sell_rate") ? parseFloat(formData.get("sell_rate") as string) : 0
+        const wholesale_rate = formData.get("wholesale_rate") ? parseFloat(formData.get("wholesale_rate") as string) : sell_rate
+        const stock = formData.get("stock") ? parseInt(formData.get("stock") as string) : 0
+        const min_stock = formData.get("min_stock") ? parseInt(formData.get("min_stock") as string) : 5
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    if (!shop) return { error: 'Shop config missing' }
+        if (!name || isNaN(sell_rate)) {
+            throw new Error("Product Name and Sell Rate are strictly required.")
+        }
 
-    const name = formData.get('name') as string
-    const barcode = formData.get('barcode') as string
-    const buying_price = formData.get('buying_price') as string
-    const selling_price = formData.get('selling_price') as string
-    const current_stock = formData.get('current_stock') as string
-    const unit = formData.get('unit') as string
-    const min_stock_alert = formData.get('min_stock_alert') as string
+        await db.insert(products).values({
+            shop_id: shopId,
+            name,
+            name_mr,
+            buy_rate: buy_rate.toString(),
+            sell_rate: sell_rate.toString(),
+            wholesale_rate: wholesale_rate.toString(),
+            stock,
+            min_stock
+        })
 
-    if (!name || name.trim() === '') return { error: 'Product name is required' }
-
-    const { error: insertError } = await supabase.rpc('wh_add_product', {
-        p_shop_id: shop.id,
-        p_name: name,
-        p_barcode: barcode || null,
-        p_buying_price: buying_price ? parseFloat(buying_price) : 0,
-        p_selling_price: selling_price ? parseFloat(selling_price) : 0,
-        p_current_stock: current_stock ? parseFloat(current_stock) : 0,
-        p_unit: unit || 'PCS',
-        p_min_stock_alert: min_stock_alert ? parseFloat(min_stock_alert) : 5
-    })
-
-    if (insertError) {
-        console.error("Add product error:", insertError)
-        return { error: 'Failed to add product: ' + insertError.message }
+        revalidatePath("/erp/wholesale/inventory")
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message }
     }
+}
 
-    revalidatePath('/erp/wholesale/inventory')
-    return { success: true }
+export async function getProductPurchaseHistory(productId: string) {
+    try {
+        const history = await db.select({
+            date: purchaseBills.bill_date,
+            supplierName: suppliers.name,
+            qty: purchaseItems.quantity,
+            buyRate: purchaseItems.buy_rate
+        })
+            .from(purchaseItems)
+            .innerJoin(purchaseBills, eq(purchaseItems.purchase_bill_id, purchaseBills.id))
+            .innerJoin(suppliers, eq(purchaseBills.supplier_id, suppliers.id))
+            .where(eq(purchaseItems.product_id, productId))
+            .orderBy(desc(purchaseBills.bill_date))
+            .limit(15)
+
+        return { success: true, data: history }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+
+export async function updateInventoryItem(formData: FormData) {
+    try {
+        const id = formData.get("id") as string
+        const name = formData.get("name") as string
+        const name_mr = formData.get("name_mr") as string
+        const buy_rate = formData.get("buy_rate") ? parseFloat(formData.get("buy_rate") as string) : 0
+        const sell_rate = formData.get("sell_rate") ? parseFloat(formData.get("sell_rate") as string) : 0
+        const wholesale_rate = formData.get("wholesale_rate") ? parseFloat(formData.get("wholesale_rate") as string) : sell_rate
+        const stock = formData.get("stock") ? parseInt(formData.get("stock") as string) : 0
+
+        if (!id || !name) throw new Error("Product ID and Name required")
+
+        await db.update(products).set({
+            name,
+            name_mr,
+            buy_rate: buy_rate.toString(),
+            sell_rate: sell_rate.toString(),
+            wholesale_rate: wholesale_rate.toString(),
+            stock
+        }).where(eq(products.id, id))
+
+        revalidatePath("/erp/wholesale/inventory")
+        revalidatePath("/erp/wholesale/pos")
+        revalidatePath("/erp/wholesale/purchase")
+        return { success: true }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
 }

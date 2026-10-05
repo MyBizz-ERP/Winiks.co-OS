@@ -1,189 +1,84 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
-import Papa from 'papaparse'
+import { db } from "@/db"
+import { shops, customers, suppliers } from "@/db/schema"
+import { eq } from "drizzle-orm"
+import { createClient } from "@/utils/supabase/server"
 
-async function getShopId() {
+export async function updateReceiptSettings(data: { name_mr: string, address: string, address_mr: string }) {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { supabase: null, shopId: null }
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', user.id).single()
-    return { supabase, shopId: shop?.id ?? null }
-}
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) throw new Error("Unauthorized")
 
-// ─────────────────────────────────────────
-// UPLOAD: PRODUCTS (via RPC - bypasses schema restriction)
-// ─────────────────────────────────────────
-export async function uploadProductsCsv(formData: FormData) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
+    await db.update(shops)
+        .set({
+            name_mr: data.name_mr,
+            address: data.address,
+            address_mr: data.address_mr,
+        })
+        .where(eq(shops.owner_id, authData.user.id))
 
-    const file = formData.get('csv_file') as File
-    if (!file || file.size === 0) return { error: 'No file selected.' }
-
-    const text = await file.text()
-    const { data: rows, errors } = Papa.parse(text, { header: true, skipEmptyLines: true })
-    if (errors.length > 0) return { error: `CSV parse error: ${errors[0].message}` }
-
-    const records = (rows as any[]).map(r => ({
-        name: r['Product Name']?.trim() || r['name']?.trim(),
-        barcode: r['Barcode']?.trim() || r['barcode']?.trim() || '',
-        buying_price: parseFloat(r['Buy Price'] || r['buying_price']) || 0,
-        selling_price: parseFloat(r['Sell Price'] || r['selling_price']) || 0,
-        current_stock: parseFloat(r['Current Stock'] || r['current_stock']) || 0,
-        unit: r['Unit']?.trim() || r['unit']?.trim() || 'PCS',
-        min_stock_alert: parseFloat(r['Min Stock Alert'] || r['min_stock_alert']) || 5,
-    })).filter(r => r.name)
-
-    if (records.length === 0) return { error: 'No valid rows found. Check your column headers match the template exactly.' }
-
-    const { data, error } = await supabase.rpc('wh_insert_products', {
-        p_shop_id: shopId,
-        p_records: records
-    })
-
-    if (error) return { error: `Upload failed: ${error.message}` }
-
-    revalidatePath('/erp/wholesale/inventory')
-    return { success: true, count: data as number }
-}
-
-// ─────────────────────────────────────────
-// UPLOAD: CUSTOMERS (via RPC)
-// ─────────────────────────────────────────
-export async function uploadCustomersCsv(formData: FormData) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
-
-    const file = formData.get('csv_file') as File
-    if (!file || file.size === 0) return { error: 'No file selected.' }
-
-    const text = await file.text()
-    const { data: rows } = Papa.parse(text, { header: true, skipEmptyLines: true })
-
-    const records = (rows as any[]).map(r => ({
-        name: r['Customer Name']?.trim() || r['name']?.trim(),
-        phone: r['Phone']?.trim() || r['phone']?.trim() || '',
-        total_credit: parseFloat(r['Udhaari Balance'] || r['total_credit']) || 0,
-    })).filter(r => r.name)
-
-    if (records.length === 0) return { error: 'No valid rows found.' }
-
-    const { data, error } = await supabase.rpc('wh_insert_customers', {
-        p_shop_id: shopId,
-        p_records: records
-    })
-
-    if (error) return { error: `Upload failed: ${error.message}` }
-
-    revalidatePath('/erp/wholesale/customers')
-    return { success: true, count: data as number }
-}
-
-// ─────────────────────────────────────────
-// UPLOAD: SUPPLIERS (via RPC)
-// ─────────────────────────────────────────
-export async function uploadSuppliersCsv(formData: FormData) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
-
-    const file = formData.get('csv_file') as File
-    if (!file || file.size === 0) return { error: 'No file selected.' }
-
-    const text = await file.text()
-    const { data: rows } = Papa.parse(text, { header: true, skipEmptyLines: true })
-
-    const records = (rows as any[]).map(r => ({
-        name: r['Supplier Name']?.trim() || r['name']?.trim(),
-        phone: r['Phone']?.trim() || r['phone']?.trim() || '',
-        company: r['Company']?.trim() || r['company']?.trim() || '',
-        total_payable: parseFloat(r['Amount Owed'] || r['total_payable']) || 0,
-    })).filter(r => r.name)
-
-    if (records.length === 0) return { error: 'No valid rows found.' }
-
-    const { data, error } = await supabase.rpc('wh_insert_suppliers', {
-        p_shop_id: shopId,
-        p_records: records
-    })
-
-    if (error) return { error: `Upload failed: ${error.message}` }
-
-    return { success: true, count: data as number }
-}
-
-// ─────────────────────────────────────────
-// GHOST ARCHIVAL: EXPORT BILLS AS JSON
-// ─────────────────────────────────────────
-export async function exportInvoicesAsJson(fromDate: string, toDate: string) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
-
-    // Cover the full end date (23:59:59)
-    const start = new Date(fromDate).toISOString()
-    const end = new Date(toDate)
-    end.setHours(23, 59, 59, 999)
-
-    const { data, error } = await supabase.rpc('wh_export_ghost_archive', {
-        p_shop_id: shopId,
-        p_start_date: start,
-        p_end_date: end.toISOString()
-    })
-
-    if (error) {
-        return { error: 'Postgres Extraction Error: ' + error.message }
-    }
-
-    return {
-        shop_id: shopId,
-        exported_at: new Date().toISOString(),
-        date_range: { from: fromDate, to: toDate },
-        invoices: data // This is the massive JSONB dump from Postgres
-    }
-}
-
-// ─────────────────────────────────────────
-// GHOST ARCHIVAL: DELETE HISTORY RANGE
-// ─────────────────────────────────────────
-export async function deleteGhostArchive(fromDate: string, toDate: string) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
-
-    const start = new Date(fromDate).toISOString()
-    const end = new Date(toDate)
-    end.setHours(23, 59, 59, 999)
-
-    const { error } = await supabase.rpc('wh_delete_ghost_archive', {
-        p_shop_id: shopId,
-        p_start_date: start,
-        p_end_date: end.toISOString()
-    })
-
-    if (error) return { error: error.message }
-
-    revalidatePath('/erp/wholesale/invoices')
     return { success: true }
 }
 
-// ─────────────────────────────────────────
-// GHOST ARCHIVAL: RE-IMPORT JSON
-// ─────────────────────────────────────────
-export async function importGhostArchive(jsonData: any) {
-    const { supabase, shopId } = await getShopId()
-    if (!supabase || !shopId) return { error: 'Authentication failed.' }
+export async function processLegacyCsv(type: 'udhaari' | 'payable', rows: any[]) {
+    const supabase = await createClient()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) throw new Error("Unauthorized")
 
-    if (!jsonData || !jsonData.invoices || !Array.isArray(jsonData.invoices)) {
-        return { error: 'Invalid Archive File Format. Missing invoices array.' }
+    const [shop] = await db.select().from(shops).where(eq(shops.owner_id, authData.user.id))
+    if (!shop) throw new Error("Tenant Not Found")
+
+    if (type === 'udhaari') {
+        const exist = await db.select().from(customers).where(eq(customers.shop_id, shop.id))
+        const existNames = new Set(exist.map(e => e.name.toLowerCase()))
+
+        const payload = rows
+            .map(r => ({
+                shop_id: shop.id,
+                name: String(r.Name || 'Legacy Customer'),
+                phone: r.Phone ? String(r.Phone) : null,
+                old_balance: String(r.Old_Balance || '0')
+            }))
+            .filter(p => !existNames.has(p.name.toLowerCase()))
+
+        if (payload.length > 0) {
+            await db.insert(customers).values(payload)
+        } else {
+            throw new Error("No unique records found. Data may have been already imported.")
+        }
     }
 
-    const { error } = await supabase.rpc('wh_reimport_ghost_archive', {
-        p_shop_id: shopId,
-        p_payload: jsonData.invoices
-    })
+    if (type === 'payable') {
+        const exist = await db.select().from(suppliers).where(eq(suppliers.shop_id, shop.id))
+        const existNames = new Set(exist.map(e => e.name.toLowerCase()))
 
-    if (error) return { error: error.message }
+        const payload = rows
+            .map(r => ({
+                shop_id: shop.id,
+                name: String(r.Name || 'Legacy Supplier'),
+                phone: r.Phone ? String(r.Phone) : null,
+                current_balance: String(r.Current_Balance || '0')
+            }))
+            .filter(p => !existNames.has(p.name.toLowerCase()))
 
-    revalidatePath('/erp/wholesale/invoices')
+        if (payload.length > 0) {
+            await db.insert(suppliers).values(payload)
+        } else {
+            throw new Error("No unique records found. Data may have been already imported.")
+        }
+    }
+
     return { success: true }
+}
+
+export async function updateVaultPin(pin: string) {
+    const supabase = await createClient()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) throw new Error('Unauthorized')
+
+    const [shop] = await db.select().from(shops).where(eq(shops.owner_id, authData.user.id))
+    if (!shop) throw new Error('No shop bound.')
+
+    await db.update(shops).set({ owner_pin: pin }).where(eq(shops.id, shop.id))
 }

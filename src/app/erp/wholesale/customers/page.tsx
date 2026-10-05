@@ -1,31 +1,24 @@
+import { db } from '@/db'
+import { shops, customers } from '@/db/schema'
+import { eq, desc } from 'drizzle-orm'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import ClientCustomerLedger from './ClientCustomerLedger'
+import CustomerClient from './components/CustomerClient'
 
-export default async function CustomersLedgerPage() {
+export const dynamic = 'force-dynamic'
+
+export default async function WholesaleCustomersPage() {
     const supabase = await createClient()
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData?.user) redirect('/login')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/login')
+    const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.owner_id, authData.user.id))
+    if (!shop) redirect('/erp')
 
-    const { data: shop } = await supabase.from('shops').select('*').eq('owner_id', user.id).single()
-    if (!shop || !shop.is_active) {
-        return <div className="p-10 text-red-600 font-bold">Your shop is inactive or suspended.</div>
-    }
+    const allCustomers = await db.select()
+        .from(customers)
+        .where(eq(customers.shop_id, shop.id))
+        .orderBy(desc(customers.created_at))
 
-    const { data: customers } = await supabase
-        .rpc('wh_get_customers', { p_shop_id: shop.id })
-
-    return (
-        <div className="p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
-            <div className="flex justify-between items-end mb-8 border-b border-slate-200 pb-4">
-                <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Customer Ledger</h1>
-                    <p className="text-slate-500 mt-1 text-sm font-medium">Record Udhaari payments and manage your client roster.</p>
-                </div>
-            </div>
-
-            <ClientCustomerLedger initialCustomers={customers || []} />
-        </div>
-    )
+    return <CustomerClient initialCustomers={allCustomers} />
 }

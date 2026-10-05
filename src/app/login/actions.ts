@@ -4,10 +4,13 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
 export async function loginTenant(formData: FormData) {
-    const email = formData.get('email') as string
+    const shopId = formData.get('shopId') as string
     const password = formData.get('password') as string
 
-    if (!email || !password) return
+    if (!shopId || !password) return
+
+    // Transparent ID to hidden Supabase entity mapper
+    const email = `shop${shopId}@winiks.app`
 
     const supabase = await createClient()
 
@@ -28,17 +31,14 @@ export async function loginTenant(formData: FormData) {
     if (!shop) redirect('/login?error=unauthorized_framework')
     if (!shop.is_active) redirect('/login?error=suspended')
 
-    // 3. Separately look up the category slug (avoids join RLS issues)
-    const { data: category } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('id', shop.category_id)
-        .single()
+    const slug = (shop.category_id ?? '').toLowerCase()
 
-    const slug = (category?.name ?? '').toLowerCase()
-
-    // 4. Route to the correct ERP module
-    if (slug.includes('wholesale')) redirect('/erp/wholesale')
-    else if (slug.includes('salon')) redirect('/erp/salon')
-    else redirect('/login?error=unauthorized_framework')
+    // 3. Route to the correct ERP module
+    if (slug.includes('wholesale')) {
+        redirect('/erp/wholesale')
+    } else if (slug.includes('salon')) {
+        redirect('/erp/salon')
+    } else {
+        redirect('/login?error=unauthorized_framework')
+    }
 }
