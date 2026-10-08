@@ -10,12 +10,20 @@ export async function loginTenant(formData: FormData) {
     if (!shopId || !password) return
 
     // Transparent ID to hidden Supabase entity mapper
-    const email = `shop${shopId}@winiks.app`
+    let email = shopId.includes('@') ? shopId : `${shopId}@winiks.app`
 
     const supabase = await createClient()
 
     // 1. Authenticate credentials
-    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
+    let { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    // 2. Legacy fallback for auto-generated integers (e.g. '1001' actually resolving to 'shop1001@winiks.app')
+    if (error && !shopId.startsWith('shop') && !shopId.includes('@')) {
+        email = `shop${shopId}@winiks.app`
+        const retry = await supabase.auth.signInWithPassword({ email, password })
+        authData = retry.data
+        error = retry.error
+    }
 
     if (error || !authData.user) {
         redirect('/login?error=invalid_credentials')

@@ -53,7 +53,7 @@ export default function VaultClient({
         finally { setIsFetchingReceipt(false) }
     }
 
-    const VAULT_PIN = '1234' // Defaulted, should match owner_pin from DB
+    const VAULT_PIN = shop?.owner_pin || '1234' // Bound to Shop DB settings
 
     const filterStart = new Date(); filterStart.setHours(0, 0, 0, 0)
     if (dateFilter === '7D') filterStart.setDate(filterStart.getDate() - 7)
