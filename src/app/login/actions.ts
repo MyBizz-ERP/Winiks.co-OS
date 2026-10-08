@@ -4,7 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
 export async function loginTenant(formData: FormData) {
-    const shopId = formData.get('shopId') as string
+    const shopId = (formData.get('shopId') as string || '').trim()
     const password = formData.get('password') as string
 
     if (!shopId || !password) return
