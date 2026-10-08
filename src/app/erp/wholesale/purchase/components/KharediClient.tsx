@@ -80,6 +80,34 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
         return () => window.removeEventListener('online', flushQueue)
     }, [])
 
+    // Checkout Resilience Rehydration Hook
+    useEffect(() => {
+        const draftStr = localStorage.getItem('mybizz_kharedi_checkout_draft')
+        if (draftStr) {
+            try {
+                const draft = JSON.parse(draftStr)
+                if (draft.cart?.length > 0) setCart(draft.cart)
+                if (draft.selectedSupplier) {
+                    setSelectedSupplier(draft.selectedSupplier)
+                    setSupplierSearch(draft.selectedSupplier.name)
+                }
+                if (draft.billRef) setBillRef(draft.billRef)
+                if (draft.amountPaid) setAmountPaid(String(draft.amountPaid))
+            } catch (e) {
+                console.error("Failed to parse kharedi draft", e)
+            }
+        }
+    }, [])
+
+    // Checkout Resilience Snapshot
+    useEffect(() => {
+        if (cart.length > 0) {
+            localStorage.setItem('mybizz_kharedi_checkout_draft', JSON.stringify({ cart, selectedSupplier, amountPaid, billRef }))
+        } else {
+            localStorage.removeItem('mybizz_kharedi_checkout_draft')
+        }
+    }, [cart, selectedSupplier, amountPaid, billRef])
+
     useEffect(() => {
         const nextId = (parseInt(localStorage.getItem('mybizz_purchase_seq') || '0', 10) + 1).toString().padStart(3, '0')
         // Automatically populate an internally tracked reference if empty

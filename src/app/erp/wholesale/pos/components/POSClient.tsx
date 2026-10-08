@@ -57,12 +57,14 @@ export default function POSClient({ products, customers, shop }: { products: Pro
         return () => window.removeEventListener('online', flushQueue)
     }, [])
 
-    // Void & Clone Rehydration Hook
+    // Checkout Resilience & Clone Rehydration Hook
     useEffect(() => {
-        const payloadStr = localStorage.getItem('mybizz_void_clone_payload')
-        if (payloadStr) {
+        const cloneStr = localStorage.getItem('mybizz_void_clone_payload')
+        const draftStr = localStorage.getItem('mybizz_pos_checkout_draft')
+
+        if (cloneStr) {
             try {
-                const payload = JSON.parse(payloadStr)
+                const payload = JSON.parse(cloneStr)
                 if (payload.customer) {
                     setSelectedCustomer(payload.customer)
                     setCustomerSearch(payload.customer.name)
@@ -75,8 +77,30 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                 console.error("Failed to parse clone payload", e)
             }
             localStorage.removeItem('mybizz_void_clone_payload')
+        } else if (draftStr) {
+            try {
+                const draft = JSON.parse(draftStr)
+                if (draft.cart?.length > 0) setCart(draft.cart)
+                if (draft.selectedCustomer) {
+                    setSelectedCustomer(draft.selectedCustomer)
+                    setCustomerSearch(draft.selectedCustomer.name)
+                }
+                if (draft.discount) setDiscount(Number(draft.discount))
+                if (draft.amountReceived) setAmountReceived(String(draft.amountReceived))
+            } catch (e) {
+                console.error("Failed to parse draft", e)
+            }
         }
     }, [])
+
+    // Checkout Resilience Snapshot
+    useEffect(() => {
+        if (cart.length > 0) {
+            localStorage.setItem('mybizz_pos_checkout_draft', JSON.stringify({ cart, selectedCustomer, discount, amountReceived }))
+        } else {
+            localStorage.removeItem('mybizz_pos_checkout_draft')
+        }
+    }, [cart, selectedCustomer, discount, amountReceived])
 
     useEffect(() => {
         const nextId = (parseInt(localStorage.getItem('mybizz_bill_seq') || '0', 10) + 1).toString().padStart(3, '0')
