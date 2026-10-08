@@ -6,7 +6,7 @@ const client = postgres('postgresql://postgres:%40Winiks.co2004@db.uuenecbtwzohi
 const db = drizzle(client);
 
 async function run() {
-    const allShops = await db.select().from(shops);
+    const allShops = await db.select({ owner_pin: shops.owner_pin, name: shops.name }).from(shops);
     console.log(allShops);
     process.exit(0);
 }

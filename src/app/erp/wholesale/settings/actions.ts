@@ -4,6 +4,8 @@ import { db } from "@/db"
 import { shops, customers, suppliers } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { createClient } from "@/utils/supabase/server"
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { revalidatePath } from 'next/cache'
 
 export async function updateReceiptSettings(data: { name_mr: string, address: string, address_mr: string }) {
     const supabase = await createClient()
@@ -108,7 +110,9 @@ export async function updateVaultPin(pin: string) {
     const [shop] = await db.select().from(shops).where(eq(shops.owner_id, authData.user.id))
     if (!shop) throw new Error('No shop bound.')
 
-    await db.update(shops).set({ owner_pin: pin }).where(eq(shops.id, shop.id))
+    await db.update(shops).set({ owner_pin: pin }).where(eq(shops.id, shop.id)).execute()
+    revalidatePath('/erp')
+    return { success: true }
 }
 
 export async function updateLoginPassword(newPassword: string) {
@@ -135,7 +139,6 @@ export async function updateLoginId(newId: string) {
     const finalEmail = newId.includes('@') ? newId : `${newId}@winiks.app`
 
     // Escalate privileges via Service Role to bypass email confirmation 
-    const { createClient: createServiceClient } = require('@supabase/supabase-js')
     const adminClient = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!

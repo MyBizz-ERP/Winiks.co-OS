@@ -140,7 +140,7 @@ export default function VaultClient({
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 mb-1">Day-End Vault</h2>
                     <p className="text-[13px] text-slate-500 mb-8">Enter your 4-digit security PIN to access financial reports.</p>
-                    <input type="password" maxLength={4} value={pin} onFocus={e => e.target.select()} onChange={e => {
+                    <input autoFocus type="password" maxLength={4} value={pin} onFocus={e => e.target.select()} onChange={e => {
                         setPin(e.target.value)
                         if (e.target.value === VAULT_PIN) setIsUnlocked(true)
                     }} placeholder="• • • •" className="text-center text-3xl tracking-[1em] w-full border-2 border-slate-200 py-3 rounded-2xl mb-4 focus:border-indigo-500 outline-none transition-all font-bold" />
