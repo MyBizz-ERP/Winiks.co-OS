@@ -148,6 +148,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     function updateRate(id: string, rate: number) { setCart(prev => prev.map(i => i.id === id ? { ...i, rate } : i)) }
 
     async function handleCheckout() {
+        if (isSubmitting) return
         if (cart.length === 0) return alert('Cart is empty.')
         const payload = {
             cart,

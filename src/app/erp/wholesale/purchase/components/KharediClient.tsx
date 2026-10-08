@@ -262,6 +262,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     const addedSupplierDebt = totalAmount - parsedAmountPaid
 
     const finalizeKharedi = async () => {
+        if (isSubmitting) return
         if (cart.length === 0 || (!supplierId && supplierId !== 'NEW')) {
             alert('Cannot finalize: Cart is empty or Supplier is missing.')
             return
