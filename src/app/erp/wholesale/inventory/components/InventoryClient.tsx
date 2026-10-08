@@ -182,6 +182,25 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
         a.click()
     }
 
+    const exportPresentProducts = () => {
+        const exportData = initialData.map(p => ({
+            "Product Name": p.name,
+            "Marathi Name": p.name_mr || '',
+            "Current Stock": p.stock,
+            "Base Buy Rate": p.buy_rate || 0,
+            "Retail Sell Rate": p.sell_rate,
+            "Wholesale Rate": p.wholesale_rate,
+            "Min Warning Stock": p.min_stock || 0
+        }))
+        const csvString = Papa.unparse(exportData)
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = "Winiks_Live_Inventory_Snapshot.csv"
+        a.click()
+    }
+
     return (
         <div className="w-full flex flex-col">
             {/* Header Toolkit Area */}
@@ -202,8 +221,11 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
                             <Loader2 className="w-3.5 h-3.5 animate-spin" /> {uploadStatus}
                         </div>
                     )}
+                    <button onClick={exportPresentProducts} className="h-11 px-4 bg-slate-900 border border-slate-900 hover:bg-black text-white font-bold text-[13px] uppercase tracking-widest rounded-[14px] transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(0,0,0,0.1)]">
+                        <Download className="w-4 h-4" /> Export
+                    </button>
                     <button onClick={downloadBulkTemplate} className="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[13px] uppercase tracking-widest rounded-[14px] transition-all flex items-center gap-2">
-                        <Download className="w-4 h-4" /> CSV
+                        Template
                     </button>
                     <button onClick={handleBulkUpload} className="h-11 px-4 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-bold text-[13px] uppercase tracking-widest rounded-[14px] transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                         <UploadCloud className="w-4 h-4" /> Bulk
