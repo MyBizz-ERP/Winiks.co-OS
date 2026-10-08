@@ -10,6 +10,8 @@ import { redirect } from 'next/navigation'
 import SaaSPaywall from "./components/SaaSPaywall"
 import MobileFloatingDock from '@/components/mobile-dock'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ERPRootLayout({ children }: { children: React.ReactNode }) {
     const supabase = await createClient()
     const { data: authData } = await supabase.auth.getUser()
