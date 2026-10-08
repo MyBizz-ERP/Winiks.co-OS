@@ -118,3 +118,29 @@ export async function updateInventoryItem(formData: FormData) {
         return { success: false, error: e.message }
     }
 }
+
+export async function bulkAddProducts(items: any[]) {
+    try {
+        const shopId = await getActiveShopId()
+
+        // We wrap bulk insertions mapping tenant id correctly
+        const payload = items.map(item => ({
+            shop_id: shopId,
+            name: item.name,
+            name_mr: item.name_mr,
+            buy_rate: (item.buy_rate || 0).toString(),
+            sell_rate: (item.sell_rate || 0).toString(),
+            wholesale_rate: (item.wholesale_rate || 0).toString(),
+            stock: item.stock || 0,
+            min_stock: item.min_stock || 5
+        }))
+
+        // Run batch insert
+        await db.insert(products).values(payload)
+
+        revalidatePath("/erp/wholesale/inventory")
+        return { success: true }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}

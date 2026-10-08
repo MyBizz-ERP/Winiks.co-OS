@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Save, UploadCloud, Download, Lock } from 'lucide-react'
+import { Save, UploadCloud, Download, Lock, Key, UserCircle } from 'lucide-react'
 import Papa from 'papaparse'
-import { updateReceiptSettings, processLegacyCsv, updateVaultPin } from '../actions'
+import { updateReceiptSettings, processLegacyCsv, updateVaultPin, updateLoginPassword, updateLoginId } from '../actions'
 
 export default function SettingsClient({ shop }: { shop: any }) {
 
@@ -16,6 +16,10 @@ export default function SettingsClient({ shop }: { shop: any }) {
     const [uploadStatus, setUploadStatus] = useState('')
     const [vaultPin, setVaultPin] = useState(shop.owner_pin || '1234')
     const [isSavingPin, setIsSavingPin] = useState(false)
+    const [appPassword, setAppPassword] = useState('')
+    const [isSavingAppPassword, setIsSavingAppPassword] = useState(false)
+    const [appId, setAppId] = useState('')
+    const [isSavingAppId, setIsSavingAppId] = useState(false)
 
     const handleSaveMetadata = async () => {
         setIsSaving(true)
@@ -42,6 +46,34 @@ export default function SettingsClient({ shop }: { shop: any }) {
         }
     }
 
+    const handleSaveAppPassword = async () => {
+        if (!appPassword || appPassword.length < 6) return alert("Password must be at least 6 characters.")
+        setIsSavingAppPassword(true)
+        try {
+            await updateLoginPassword(appPassword)
+            alert("Master Login Password securely overwritten.")
+            setAppPassword('')
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSavingAppPassword(false)
+        }
+    }
+
+    const handleSaveAppId = async () => {
+        if (!appId || appId.length < 4) return alert("Login ID must be at least 4 characters.")
+        setIsSavingAppId(true)
+        try {
+            const res = await updateLoginId(appId)
+            alert(`Master Login ID successfully overwritten to: ${res.newId}`)
+            setAppId('')
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSavingAppId(false)
+        }
+    }
+
     const triggerUpload = (type: 'udhaari' | 'payable') => {
         const input = document.createElement('input')
         input.type = 'file'
@@ -60,9 +92,9 @@ export default function SettingsClient({ shop }: { shop: any }) {
                         await processLegacyCsv(type, results.data)
                         setUploadStatus('')
                         alert("Legacy Template successfully deployed into live ledgers.")
-                    } catch (err) {
+                    } catch (err: any) {
                         setUploadStatus('')
-                        alert("Malformed Engine Error.")
+                        alert(err.message || "Malformed Engine Error.")
                     }
                 }
             })
@@ -146,7 +178,7 @@ export default function SettingsClient({ shop }: { shop: any }) {
                     <h2 className="text-sm font-bold text-amber-900 tracking-widest uppercase">Security Vault Integrity</h2>
                 </div>
                 <div className="p-6 md:p-8 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block flex items-center gap-1">
                                 Day-End Vault Access PIN <Lock className="w-3 h-3 text-amber-500" />
@@ -160,14 +192,53 @@ export default function SettingsClient({ shop }: { shop: any }) {
                                 placeholder="••••"
                             />
                             <p className="text-[10px] text-slate-400 mt-2">Numeric strictly. Required to unlock exact net profits.</p>
+
+                            <button onClick={handleSaveVault} disabled={isSavingPin} className="mt-3 w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm tracking-wide px-6 py-3 rounded-lg transition-colors">
+                                <Save className="w-4 h-4" />
+                                {isSavingPin ? 'LOCKING...' : 'ENFORCE SECURITY PIN'}
+                            </button>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block flex items-center gap-1">
+                                Master Login ID <UserCircle className="w-3 h-3 text-indigo-500" />
+                            </label>
+                            <input
+                                minLength={4}
+                                type="text"
+                                value={appId}
+                                onChange={e => setAppId(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-lg font-bold text-slate-900 transition-all outline-none"
+                                placeholder="e.g shop123"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-2">Will forcefully disconnect active sessions on change start.</p>
+
+                            <button onClick={handleSaveAppId} disabled={isSavingAppId} className="mt-3 w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wide px-6 py-3 rounded-lg transition-colors">
+                                <Save className="w-4 h-4" />
+                                {isSavingAppId ? 'UPDATING...' : 'UPDATE LOGIN ID'}
+                            </button>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block flex items-center gap-1">
+                                Master Login Password <Key className="w-3 h-3 text-rose-500" />
+                            </label>
+                            <input
+                                minLength={6}
+                                type="password"
+                                value={appPassword}
+                                onChange={e => setAppPassword(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 focus:border-rose-500 rounded-xl text-lg font-bold text-slate-900 transition-all outline-none"
+                                placeholder="New Secure Password"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-2">Sets new credential pair requirement for engine boot.</p>
+
+                            <button onClick={handleSaveAppPassword} disabled={isSavingAppPassword} className="mt-3 w-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm tracking-wide px-6 py-3 rounded-lg transition-colors">
+                                <Save className="w-4 h-4" />
+                                {isSavingAppPassword ? 'UPDATING...' : 'UPDATE LOGIN PASS'}
+                            </button>
                         </div>
                     </div>
-                </div>
-                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                    <button onClick={handleSaveVault} disabled={isSavingPin} className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm tracking-wide px-6 py-3 rounded-lg transition-colors">
-                        <Save className="w-4 h-4" />
-                        {isSavingPin ? 'LOCKING...' : 'ENFORCE SECURITY PIN'}
-                    </button>
                 </div>
             </Card>
 

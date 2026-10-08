@@ -16,12 +16,16 @@ export default function VaultClient({
     purchases,
     customerPayments,
     supplierPayments,
+    importedUdhaari = [],
+    importedPayables = [],
     shop
 }: {
     invoices: Invoice[],
     purchases: Purchase[],
     customerPayments: Payment[],
     supplierPayments: Payment[],
+    importedUdhaari?: { id: string, old_balance: string, created_at: Date }[],
+    importedPayables?: { id: string, current_balance: string, created_at: Date }[],
     shop: any
 }) {
     const [pin, setPin] = useState('')
@@ -59,6 +63,8 @@ export default function VaultClient({
     const todayPurchases = purchases.filter(p => new Date(p.created_at) >= filterStart)
     const todayCustPay = customerPayments.filter(p => new Date(p.created_at) >= filterStart)
     const todaySuppPay = supplierPayments.filter(p => new Date(p.created_at) >= filterStart)
+    const todayImportedUdhaari = importedUdhaari.filter(i => new Date(i.created_at) >= filterStart)
+    const todayImportedPayables = importedPayables.filter(p => new Date(p.created_at) >= filterStart)
 
     const exportCSV = () => {
         const rows = [
@@ -109,17 +115,21 @@ export default function VaultClient({
     const totalCashPaid = purchaseCashOut + supplierCashOut
     const netCashDrawer = totalCashCollected - totalCashPaid
 
-    const newUdhaariGenerated = todayInvoices.reduce((s, i) => {
+    const grossNewUdhaari = todayInvoices.reduce((s, i) => {
         const net = parseFloat(String(i.total_amount || '0'))
         const paid = parseFloat(String(i.amount_paid || '0'))
         return s + (net > paid ? net - paid : 0)
-    }, 0)
+    }, 0) + todayImportedUdhaari.reduce((s, u) => s + parseFloat(String(u.old_balance || '0')), 0)
 
-    const newSupplierDebtGenerated = todayPurchases.reduce((s, p) => {
+    const newUdhaariGenerated = grossNewUdhaari - udhaariCashIn
+
+    const grossNewSupplierDebt = todayPurchases.reduce((s, p) => {
         const total = parseFloat(String(p.total_amount || '0'))
         const paid = parseFloat(String(p.amount_paid || '0'))
         return s + (total > paid ? total - paid : 0)
-    }, 0)
+    }, 0) + todayImportedPayables.reduce((s, p) => s + parseFloat(String(p.current_balance || '0')), 0)
+
+    const newSupplierDebtGenerated = grossNewSupplierDebt - supplierCashOut
 
     if (!isUnlocked) {
         return (
@@ -182,11 +192,17 @@ export default function VaultClient({
                     <p className="text-xl font-black text-white">₹{netCashDrawer.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                 </div>
                 <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm">
-                    <p className="text-[11px] font-bold text-amber-500 uppercase tracking-widest mb-1.5">New Receivable (Given)</p>
+                    <p className="text-[11px] font-bold text-amber-500 uppercase tracking-widest mb-1.5 flex flex-col">
+                        <span>Net Receivable</span>
+                        <span className="text-[9px] opacity-70 mt-0.5">(Given vs Recovered)</span>
+                    </p>
                     <p className="text-xl font-black text-amber-600">₹{newUdhaariGenerated.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                 </div>
                 <div className="bg-white border border-rose-200 rounded-2xl p-5 shadow-sm">
-                    <p className="text-[11px] font-bold text-rose-500 uppercase tracking-widest mb-1.5">Total Due (Taken)</p>
+                    <p className="text-[11px] font-bold text-rose-500 uppercase tracking-widest mb-1.5 flex flex-col">
+                        <span>Net Account Payable</span>
+                        <span className="text-[9px] opacity-70 mt-0.5">(Taken vs Paid)</span>
+                    </p>
                     <p className="text-xl font-black text-rose-600">₹{newSupplierDebtGenerated.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                 </div>
             </div>

@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { addProduct, getProductPurchaseHistory, updateInventoryItem } from "../actions"
-import { PackagePlus, Search, Loader2, ArrowRight, Edit3, X, Check } from "lucide-react"
+import { addProduct, getProductPurchaseHistory, updateInventoryItem, bulkAddProducts } from "../actions"
+import { PackagePlus, Search, Loader2, ArrowRight, Edit3, X, Check, UploadCloud, Download } from "lucide-react"
+import Papa from "papaparse"
 
 export function InventoryClient({ initialData }: { initialData: any[] }) {
     const [searchTerm, setSearchTerm] = useState("")
@@ -102,6 +103,85 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
         }
     }
 
+    const [uploadStatus, setUploadStatus] = useState("")
+
+    const handleBulkUpload = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.csv'
+        input.onchange = (e: any) => {
+            const file = e.target.files[0]
+            if (!file) return
+            setUploadStatus("Parsing CSV...")
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: async (results) => {
+                    const rows = results.data as any[]
+                    setUploadStatus(`Translating & Injecting ${rows.length} Matrix Items...`)
+                    let processedData = []
+
+                    try {
+                        for (const row of rows) {
+                            let mr = row.name_mr
+                            if (!mr && row.name) {
+                                // Background Auto Translate
+                                try {
+                                    const words = row.name.split(' ')
+                                    const translated: string[] = []
+                                    for (const w of words) {
+                                        if (!w) { translated.push(''); continue }
+                                        const res = await fetch(`https://inputtools.google.com/request?text=${w}&itc=mr-t-i0-und&num=1`)
+                                        const data = await res.json()
+                                        if (data[0] === 'SUCCESS') translated.push(data[1][0][1][0])
+                                        else translated.push(w)
+                                    }
+                                    mr = translated.join(' ')
+                                } catch {
+                                    mr = row.name // Fallback if offline
+                                }
+                            }
+                            processedData.push({
+                                name: row.name,
+                                name_mr: mr || row.name,
+                                buy_rate: row.buy_rate || 0,
+                                sell_rate: row.sell_rate || 0,
+                                wholesale_rate: row.wholesale_rate || row.sell_rate || 0,
+                                stock: row.stock || 0,
+                                min_stock: row.min_stock || 5
+                            })
+                        }
+
+                        const res = await bulkAddProducts(processedData)
+                        if (res.success) {
+                            alert(`Success: Deployed ${processedData.length} records into the Core Matrix.`)
+                            window.location.reload()
+                        } else {
+                            alert("Engine Fault: " + res.error)
+                        }
+                    } catch (e) {
+                        alert("Upload stream interrupted.")
+                    } finally {
+                        setUploadStatus("")
+                    }
+                }
+            })
+        }
+        input.click()
+    }
+
+    const templateCSV = "name,name_mr,buy_rate,sell_rate,wholesale_rate,stock,min_stock\nMarie Gold,,8.50,10.00,9.00,100,20\nTata Salt,टाटा मीठ,21.00,25.00,23.00,50,10"
+
+    const downloadBulkTemplate = () => {
+        const blob = new Blob([templateCSV], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = "Winiks_Inventory_Matrix_Template.csv"
+        a.click()
+    }
+
     return (
         <div className="w-full flex flex-col">
             {/* Header Toolkit Area */}
@@ -114,6 +194,20 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10 h-11 bg-slate-50/50 border-slate-200/60 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] focus-visible:ring-indigo-500/20 focus-visible:bg-white rounded-[14px] transition-all text-[15px]"
                     />
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    {uploadStatus && (
+                        <div className="hidden lg:flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg text-xs font-bold text-indigo-600 tracking-widest animate-pulse">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {uploadStatus}
+                        </div>
+                    )}
+                    <button onClick={downloadBulkTemplate} className="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[13px] uppercase tracking-widest rounded-[14px] transition-all flex items-center gap-2">
+                        <Download className="w-4 h-4" /> CSV
+                    </button>
+                    <button onClick={handleBulkUpload} className="h-11 px-4 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-bold text-[13px] uppercase tracking-widest rounded-[14px] transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                        <UploadCloud className="w-4 h-4" /> Bulk
+                    </button>
                 </div>
 
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>

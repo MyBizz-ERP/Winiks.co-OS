@@ -50,16 +50,17 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
     }
 
     const exportSelectedCSV = () => {
-        const rows = [["Bill Date", "Bill ID", "Supplier Name", "Total Purchased", "Cash Paid Out", "Debt Logged"]]
+        const rows = [["Bill Date", "Type", "Bill ID", "Supplier Name", "Total Purchased", "Cash Paid Out", "Debt Logged"]]
         dateSegmented.filter(b => selectedBills.includes(b.id)).forEach(bill => {
             const debt = bill.total_amount - bill.amount_paid
             rows.push([
                 format(new Date(bill.created_at), 'dd MMM yyyy'),
+                bill.type === 'PAYMENT' ? 'Payment' : 'Bill',
                 bill.id,
                 bill.supplier_name || 'N/A',
-                bill.total_amount,
+                bill.type === 'PAYMENT' ? '0' : bill.total_amount,
                 bill.amount_paid,
-                debt > 0 ? debt : '0'
+                debt > 0 && bill.type !== 'PAYMENT' ? debt : '0'
             ])
         })
         const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n")
@@ -87,16 +88,17 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
     }
 
     const exportCSV = () => {
-        const rows = [["Bill Date", "Bill ID", "Supplier Name", "Total Purchased", "Cash Paid Out", "Debt Logged"]]
+        const rows = [["Bill Date", "Type", "Bill ID", "Supplier Name", "Total Purchased", "Cash Paid Out", "Debt Logged"]]
         dateSegmented.forEach(bill => {
             const debt = bill.total_amount - bill.amount_paid
             rows.push([
                 format(new Date(bill.created_at), 'dd MMM yyyy'),
+                bill.type === 'PAYMENT' ? 'Payment' : 'Bill',
                 bill.id,
                 bill.supplier_name || 'N/A',
-                bill.total_amount,
+                bill.type === 'PAYMENT' ? '0' : bill.total_amount,
                 bill.amount_paid,
-                debt > 0 ? debt : '0'
+                debt > 0 && bill.type !== 'PAYMENT' ? debt : '0'
             ])
         })
         const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n")
@@ -225,29 +227,62 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
                         <tbody className="divide-y divide-slate-100 text-[13px]">
                             {dateSegmented.map(bill => {
                                 const debt = bill.total_amount - bill.amount_paid
+                                const isPayment = bill.type === 'PAYMENT'
+                                const isLegacy = bill.payment_method === 'LEGACY_B/F'
                                 return (
-                                    <tr key={bill.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <tr key={bill.id} className={`${isPayment ? 'bg-emerald-50/20' : isLegacy ? 'bg-amber-50/20' : 'hover:bg-slate-50/50'} transition-colors`}>
                                         <td className="px-5 py-4">
-                                            <div className="font-mono text-slate-900 font-bold text-[12px]">{bill.id.split('-')[0].toUpperCase()}</div>
+                                            <div className={`font-mono font-bold text-[12px] ${isLegacy ? 'text-amber-700' : 'text-slate-900'}`}>
+                                                {isPayment ? 'CASH PMT' : isLegacy ? 'OPENING BALANCE' : bill.id.split('-')[0].toUpperCase()}
+                                            </div>
                                             <div className="text-slate-500 text-[11px] mt-0.5">{format(new Date(bill.created_at), 'dd MMM yy, hh:mm a')}</div>
                                         </td>
                                         <td className="px-5 py-4 font-semibold text-slate-700">
-                                            <div className="flex items-center gap-2 group/sup">
-                                                {bill.supplier_name || 'Unknown Supplier'}
+                                            <div className="flex flex-col gap-0.5 group/sup">
+                                                <div className="flex items-center gap-2">
+                                                    {bill.supplier_name || 'Unknown Supplier'}
+                                                    {bill.supplier_id && !isPayment && !isLegacy && (
+                                                        <button onClick={() => openSupplierModal(bill)} className="p-1 opacity-0 group-hover/sup:opacity-100 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-md transition-all">
+                                                            <Edit className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                                 {bill.supplier_id && (
-                                                    <button onClick={() => openSupplierModal(bill)} className="p-1 opacity-0 group-hover/sup:opacity-100 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-md transition-all">
-                                                        <Edit className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 mt-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                                        Rem: {parseFloat(bill.supplier_balance || '0') > 0 ? (
+                                                            <span className="text-rose-500">₹{parseFloat(bill.supplier_balance || '0').toLocaleString('en-IN')}</span>
+                                                        ) : (
+                                                            <span className="text-emerald-500">₹0</span>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4 text-right font-medium text-slate-900">{formatCurrency(bill.total_amount)}</td>
-                                        <td className="px-5 py-4 text-right font-black text-rose-600 bg-rose-50/30">{formatCurrency(bill.amount_paid)}</td>
-                                        <td className="px-5 py-4 text-right font-bold text-amber-600">{debt > 0 ? formatCurrency(debt) : '₹0'}</td>
+                                        <td className="px-5 py-4 text-right font-medium text-slate-900">{isPayment ? '--' : formatCurrency(bill.total_amount)}</td>
+                                        <td className={`px-5 py-4 text-right font-black ${isPayment ? 'text-emerald-600 bg-emerald-50/50' : isLegacy ? 'text-slate-400 bg-slate-50/50' : 'text-rose-600 bg-rose-50/30'}`}>{isLegacy ? '--' : formatCurrency(bill.amount_paid)}</td>
+                                        <td className="px-5 py-4 text-right">
+                                            {isPayment || isLegacy ? (
+                                                <span className="font-bold text-slate-400">--</span>
+                                            ) : debt > 0 ? (
+                                                <span className="font-bold text-rose-500">+{formatCurrency(debt)}</span>
+                                            ) : debt < 0 ? (
+                                                <span className="font-bold text-emerald-500">{formatCurrency(debt)}</span>
+                                            ) : (
+                                                <span className="font-bold text-slate-300">₹0</span>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-4">
                                             <div className="flex justify-end gap-2">
-                                                <button onClick={() => viewReceipt(bill.id)} disabled={isFetchingPrint} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 hover:bg-indigo-100 disabled:opacity-50"><Eye className="w-4 h-4" /></button>
-                                                <button onClick={() => openEditModal(bill)} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0 hover:bg-rose-100"><Edit className="w-4 h-4" /></button>
+                                                {!isPayment && !isLegacy && (
+                                                    <>
+                                                        <button onClick={() => viewReceipt(bill.id)} disabled={isFetchingPrint} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 hover:bg-indigo-100 disabled:opacity-50"><Eye className="w-4 h-4" /></button>
+                                                        <button onClick={() => openEditModal(bill)} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0 hover:bg-rose-100"><Edit className="w-4 h-4" /></button>
+                                                    </>
+                                                )}
+                                                {isLegacy && (
+                                                    <span className="text-[10px] uppercase font-bold text-amber-500/50 tracking-widest px-2">IMPORTED</span>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

@@ -2,7 +2,7 @@
 
 import { db } from '@/db'
 import { shops } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 
@@ -152,6 +152,51 @@ export async function performAdminAction(formData: FormData) {
         } catch (error: any) {
             console.error("ADMIN RESET ERROR:", error)
             throw new Error(`Credential cycle failed: ${error.message || 'Unknown error'}`)
+        }
+    }
+
+    if (actionType === 'delete_tenant') {
+        const shopId = formData.get('shopId')?.toString()
+        if (!shopId) throw new Error("Missing Shop Payload")
+
+        try {
+            const targetShop = await db.select({ tenant_code: shops.tenant_code, owner_id: shops.owner_id })
+                .from(shops).where(eq(shops.id, shopId)).limit(1)
+
+            if (!targetShop.length) {
+                throw new Error("Invalid Node Identity Map")
+            }
+
+            // 1. Delete Auth User from Supabase
+            const { createClient: createServiceClient } = require('@supabase/supabase-js')
+            const adminClient = createServiceClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!
+            )
+
+            // We attempt to delete the user to clean up identity. If it fails due to being missing, we ignore it.
+            if (targetShop[0].owner_id) {
+                await adminClient.auth.admin.deleteUser(targetShop[0].owner_id)
+            }
+
+            // 2. Perform deep manual scrub of all dependent records to bypass missing `ON DELETE CASCADE` migrations
+            await db.execute(sql`DELETE FROM wholesale.invoice_items WHERE invoice_id IN (SELECT id FROM wholesale.invoices WHERE shop_id = ${shopId})`)
+            await db.execute(sql`DELETE FROM wholesale.purchase_items WHERE purchase_bill_id IN (SELECT id FROM wholesale.purchase_bills WHERE shop_id = ${shopId})`)
+            await db.execute(sql`DELETE FROM wholesale.customer_payments WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.supplier_payments WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.invoices WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.purchase_bills WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.customers WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.suppliers WHERE shop_id = ${shopId}`)
+            await db.execute(sql`DELETE FROM wholesale.products WHERE shop_id = ${shopId}`)
+
+            // 3. Erase Tenant from Postgres
+            await db.delete(shops).where(eq(shops.id, shopId))
+
+            return { success: true }
+        } catch (error: any) {
+            console.error("ADMIN DELETE ERROR:", error)
+            throw new Error(`Deletion sequence failed: ${error.message || 'Unknown error'}`)
         }
     }
 

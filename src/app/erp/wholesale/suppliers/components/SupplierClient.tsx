@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Plus, X, Search, Phone, IndianRupee, Trash2, User, Download, Edit } from 'lucide-react'
-import { createSupplier, deleteSupplier, updateSupplier } from '../actions'
+import { Users, Plus, X, Search, Phone, IndianRupee, Trash2, User, Download, Edit, CheckCircle2, TrendingUp } from 'lucide-react'
+import { createSupplier, deleteSupplier, updateSupplier, addManualSupplierDebt, addManualSupplierPayment } from '../actions'
 
 export default function SupplierClient({ initialSuppliers }: { initialSuppliers: any[] }) {
     const [search, setSearch] = useState('')
@@ -12,6 +12,12 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
     const [isDeletingId, setIsDeletingId] = useState<string | null>(null)
     const [editingSupplier, setEditingSupplier] = useState<any>(null)
     const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL')
+
+    // Add manual actions state
+    const [payingId, setPayingId] = useState<string | null>(null)
+    const [payAmount, setPayAmount] = useState('')
+    const [addingId, setAddingId] = useState<string | null>(null)
+    const [addAmount, setAddAmount] = useState('')
 
     const filtered = initialSuppliers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
 
@@ -72,6 +78,38 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
             alert(e.message)
         } finally {
             setIsDeletingId(null)
+        }
+    }
+
+    async function handleRecordPayment(supplierId: string) {
+        const amount = parseFloat(payAmount)
+        if (!amount || amount <= 0) return alert('Enter a valid amount')
+        setIsSubmitting(true)
+        try {
+            await addManualSupplierPayment(supplierId, amount)
+            setPayingId(null)
+            setPayAmount('')
+            window.location.reload()
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    async function handleRecordDebt(supplierId: string) {
+        const amount = parseFloat(addAmount)
+        if (!amount || amount <= 0) return alert('Enter a valid debt amount')
+        setIsSubmitting(true)
+        try {
+            await addManualSupplierDebt(supplierId, amount)
+            setAddingId(null)
+            setAddAmount('')
+            window.location.reload()
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -196,7 +234,41 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3.5 text-right">
+                                                {payingId === supplier.id ? (
+                                                    <div className="flex items-center gap-2 justify-end mb-2">
+                                                        <div className="relative">
+                                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                                            <input autoFocus type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0" className="w-28 pl-6 pr-2 h-9 border-2 border-indigo-300 rounded-lg text-[13px] font-bold focus:border-indigo-500 outline-none" />
+                                                        </div>
+                                                        <button onClick={() => handleRecordPayment(supplier.id)} disabled={isSubmitting} className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-bold rounded-lg flex items-center gap-1 transition-all disabled:opacity-50">
+                                                            <CheckCircle2 className="w-4 h-4" /> Pay
+                                                        </button>
+                                                        <button onClick={() => { setPayingId(null); setPayAmount('') }} className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[13px] font-bold rounded-lg transition-all">Cancel</button>
+                                                    </div>
+                                                ) : addingId === supplier.id ? (
+                                                    <div className="flex items-center gap-2 justify-end mb-2">
+                                                        <div className="relative">
+                                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                                            <input autoFocus type="number" value={addAmount} onChange={e => setAddAmount(e.target.value)} placeholder="0" className="w-28 pl-6 pr-2 h-9 border-2 border-rose-300 rounded-lg text-[13px] font-bold focus:border-rose-500 outline-none" />
+                                                        </div>
+                                                        <button onClick={() => handleRecordDebt(supplier.id)} disabled={isSubmitting} className="h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-bold rounded-lg flex items-center gap-1 transition-all disabled:opacity-50">
+                                                            <TrendingUp className="w-4 h-4" /> Add
+                                                        </button>
+                                                        <button onClick={() => { setAddingId(null); setAddAmount('') }} className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[13px] font-bold rounded-lg transition-all">Cancel</button>
+                                                    </div>
+                                                ) : null}
+
                                                 <div className="flex justify-end gap-2">
+                                                    {!payingId && !addingId && (
+                                                        <>
+                                                            <button onClick={() => { setPayingId(supplier.id); setAddingId(null) }} disabled={bal <= 0} className="px-3 py-1.5 bg-white border border-slate-200 text-[12px] font-semibold text-slate-600 rounded-lg hover:bg-emerald-50 hover:border-emerald-200 shadow-sm transition-all whitespace-nowrap">
+                                                                Payment
+                                                            </button>
+                                                            <button onClick={() => { setAddingId(supplier.id); setPayingId(null) }} className="px-3 py-1.5 bg-white border border-slate-200 text-[12px] font-semibold text-slate-600 rounded-lg hover:bg-rose-50 hover:border-rose-200 shadow-sm transition-all whitespace-nowrap mr-2">
+                                                                Add Debt
+                                                            </button>
+                                                        </>
+                                                    )}
                                                     <button onClick={() => setEditingSupplier(supplier)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-all"><Edit className="w-4 h-4" /></button>
                                                     <button
                                                         onClick={() => handleDelete(supplier.id)}

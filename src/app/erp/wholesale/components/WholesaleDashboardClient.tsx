@@ -230,7 +230,7 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
                             </div>
                         ) : (
                             <div className="flex flex-col gap-3">
-                                {payload.lowStock.map((prod) => (
+                                {payload.lowStock.slice(0, 5).map((prod) => (
                                     <div key={prod.id} className="flex items-center justify-between p-3 bg-rose-50/30 border border-rose-100 rounded-xl">
                                         <div>
                                             <p className="text-[13px] font-semibold text-slate-800">{prod.name}</p>
@@ -241,6 +241,11 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
                                         </div>
                                     </div>
                                 ))}
+                                {payload.lowStock.length > 5 && (
+                                    <p className="text-center text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-2">
+                                        + {payload.lowStock.length - 5} more items low on stock
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>

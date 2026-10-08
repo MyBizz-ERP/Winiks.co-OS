@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { shops, invoices, purchaseBills, customerPayments, supplierPayments } from '@/db/schema'
+import { shops, invoices, purchaseBills, customerPayments, supplierPayments, customers, suppliers } from '@/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
@@ -53,11 +53,27 @@ export default async function VaultPage() {
     }).from(supplierPayments)
         .where(eq(supplierPayments.shop_id, shop.id))
 
+    const importedUdhaari = await db.select({
+        id: customers.id,
+        old_balance: customers.old_balance,
+        created_at: customers.created_at,
+    }).from(customers)
+        .where(eq(customers.shop_id, shop.id))
+
+    const importedPayables = await db.select({
+        id: suppliers.id,
+        current_balance: suppliers.current_balance,
+        created_at: suppliers.created_at,
+    }).from(suppliers)
+        .where(eq(suppliers.shop_id, shop.id))
+
     return <VaultClient
         invoices={todayInvoices}
         purchases={todayPurchases}
         customerPayments={todayCustomerPayments}
         supplierPayments={todaySupplierPayments}
+        importedUdhaari={importedUdhaari}
+        importedPayables={importedPayables}
         shop={shop}
     />
 }

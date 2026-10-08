@@ -63,15 +63,16 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
     }
 
     const exportSelectedCSV = () => {
-        const rows = [["Bill Date", "Bill ID", "Customer Name", "Subtotal", "Discount", "Net Bill", "Cash Received"]]
+        const rows = [["Bill Date", "Type", "Bill ID", "Customer Name", "Subtotal", "Discount", "Net Bill", "Cash Received"]]
         dateSegmented.filter(b => selectedInvoices.includes(b.id)).forEach(bill => {
             rows.push([
                 format(new Date(bill.created_at), 'dd MMM yyyy'),
+                bill.type === 'PAYMENT' ? 'Payment' : 'Bill',
                 bill.id,
                 bill.customer_name || 'Walk-in Customer',
-                bill.subtotal,
-                bill.discount,
-                bill.total_amount,
+                bill.type === 'PAYMENT' ? 0 : bill.subtotal,
+                bill.type === 'PAYMENT' ? 0 : bill.discount,
+                bill.type === 'PAYMENT' ? 0 : bill.total_amount,
                 bill.amount_paid
             ])
         })
@@ -100,15 +101,16 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
     }
 
     const exportCSV = () => {
-        const rows = [["Bill Date", "Bill ID", "Customer Name", "Subtotal", "Discount", "Net Bill", "Cash Received"]]
+        const rows = [["Bill Date", "Type", "Bill ID", "Customer Name", "Subtotal", "Discount", "Net Bill", "Cash Received"]]
         dateSegmented.forEach(bill => {
             rows.push([
                 format(new Date(bill.created_at), 'dd MMM yyyy'),
+                bill.type === 'PAYMENT' ? 'Payment' : 'Bill',
                 bill.id,
                 bill.customer_name || 'Walk-in Customer',
-                bill.subtotal,
-                bill.discount,
-                bill.total_amount,
+                bill.type === 'PAYMENT' ? 0 : bill.subtotal,
+                bill.type === 'PAYMENT' ? 0 : bill.discount,
+                bill.type === 'PAYMENT' ? 0 : bill.total_amount,
                 bill.amount_paid
             ])
         })
@@ -214,33 +216,74 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                                 <th className="px-5 py-4 text-right">Discount</th>
                                 <th className="px-5 py-4 text-right">Net Bill</th>
                                 <th className="px-5 py-4 text-right bg-indigo-50/50 text-indigo-700">Cash Received</th>
+                                <th className="px-5 py-4 text-right">Debt Logged</th>
                                 <th className="px-5 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-[13px]">
-                            {dateSegmented.map(bill => (
-                                <tr key={bill.id} className={`hover:bg-slate-50/50 transition-colors ${selectedInvoices.includes(bill.id) ? 'bg-indigo-50/20' : ''}`}>
-                                    <td className="px-5 py-4">
-                                        <input type="checkbox" checked={selectedInvoices.includes(bill.id)} onChange={() => toggleSelect(bill.id)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
-                                    </td>
-                                    <td className="px-5 py-4">
-                                        <div className="font-mono text-slate-900 font-bold text-[12px]">{bill.id.split('-')[0].toUpperCase()}</div>
-                                        <div className="text-slate-500 text-[11px] mt-0.5">{format(new Date(bill.created_at), 'dd MMM yy, hh:mm a')}</div>
-                                    </td>
-                                    <td className="px-5 py-4 font-semibold text-slate-700">{bill.customer_name || 'Walk-in Customer'}</td>
-                                    <td className="px-5 py-4 text-right font-medium text-slate-600">{formatCurrency(bill.subtotal)}</td>
-                                    <td className="px-5 py-4 text-right font-medium text-rose-500">- {formatCurrency(bill.discount)}</td>
-                                    <td className="px-5 py-4 text-right font-black text-slate-900">{formatCurrency(bill.total_amount)}</td>
-                                    <td className="px-5 py-4 text-right font-black text-emerald-600 bg-emerald-50/30">{formatCurrency(bill.amount_paid)}</td>
-                                    <td className="px-5 py-4">
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={() => viewReceipt(bill.id)} disabled={isFetchingPrint} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 hover:bg-indigo-100 disabled:opacity-50"><Eye className="w-4 h-4" /></button>
-                                            <button onClick={() => handleVoidAndClone(bill.id)} disabled={isSaving} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0 hover:bg-rose-100 disabled:opacity-50" title="Void & Clone to POS"><Receipt className="w-4 h-4" /></button>
-                                            <button onClick={() => openEditModal(bill)} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg shrink-0 hover:bg-amber-100"><Edit className="w-4 h-4" /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                            {dateSegmented.map(bill => {
+                                const isPayment = bill.type === 'PAYMENT'
+                                const isLegacy = bill.payment_method === 'LEGACY_B/F'
+                                return (
+                                    <tr key={bill.id} className={`transition-colors ${selectedInvoices.includes(bill.id) ? 'bg-indigo-50/20' : ''} ${isPayment ? 'bg-emerald-50/20' : isLegacy ? 'bg-amber-50/20' : 'hover:bg-slate-50/50'}`}>
+                                        <td className="px-5 py-4">
+                                            {!isPayment && !isLegacy && <input type="checkbox" checked={selectedInvoices.includes(bill.id)} onChange={() => toggleSelect(bill.id)} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />}
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <div className={`font-mono font-bold text-[12px] ${isLegacy ? 'text-amber-700' : 'text-slate-900'}`}>
+                                                {isPayment ? 'CASH PMT' : isLegacy ? 'OPENING BALANCE' : bill.id.split('-')[0].toUpperCase()}
+                                            </div>
+                                            <div className="text-slate-500 text-[11px] mt-0.5">{format(new Date(bill.created_at), 'dd MMM yy, hh:mm a')}</div>
+                                        </td>
+                                        <td className="px-5 py-4 font-semibold text-slate-700">
+                                            <div className="flex flex-col gap-0.5 group/sup">
+                                                <div className="flex items-center gap-2">
+                                                    {bill.customer_name || 'Walk-in Customer'}
+                                                </div>
+                                                {bill.customer_id && (
+                                                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5 mt-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                                        Rem: {parseFloat(bill.customer_balance || '0') > 0 ? (
+                                                            <span className="text-indigo-500">₹{parseFloat(bill.customer_balance || '0').toLocaleString('en-IN')}</span>
+                                                        ) : (
+                                                            <span className="text-emerald-500">₹0</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-4 text-right font-medium text-slate-600">{isPayment ? '--' : formatCurrency(bill.subtotal)}</td>
+                                        <td className="px-5 py-4 text-right font-medium text-rose-500">{isPayment ? '--' : `- ${formatCurrency(bill.discount)}`}</td>
+                                        <td className="px-5 py-4 text-right font-black text-slate-900">{isPayment ? '--' : formatCurrency(bill.total_amount)}</td>
+                                        <td className={`px-5 py-4 text-right font-black ${isPayment ? 'text-emerald-600 bg-emerald-50/50' : isLegacy ? 'text-slate-400 bg-slate-50/50' : 'text-emerald-600 bg-emerald-50/30'}`}>{isLegacy ? '--' : formatCurrency(bill.amount_paid)}</td>
+                                        <td className="px-5 py-4 text-right">
+                                            {isPayment || isLegacy ? (
+                                                <span className="font-bold text-slate-400">--</span>
+                                            ) : (bill.total_amount - bill.amount_paid) > 0 ? (
+                                                <span className="font-bold text-rose-500">+{formatCurrency(bill.total_amount - bill.amount_paid)}</span>
+                                            ) : (bill.total_amount - bill.amount_paid) < 0 ? (
+                                                <span className="font-bold text-emerald-500">{formatCurrency(bill.total_amount - bill.amount_paid)}</span>
+                                            ) : (
+                                                <span className="font-bold text-slate-300">₹0</span>
+                                            )}
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <div className="flex justify-end gap-2">
+                                                {!isPayment && !isLegacy && (
+                                                    <>
+                                                        <button onClick={() => viewReceipt(bill.id)} disabled={isFetchingPrint} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 hover:bg-indigo-100 disabled:opacity-50"><Eye className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleVoidAndClone(bill.id)} disabled={isSaving} className="p-1.5 bg-rose-50 text-rose-600 rounded-lg shrink-0 hover:bg-rose-100 disabled:opacity-50" title="Void & Clone to POS"><Receipt className="w-4 h-4" /></button>
+                                                        <button onClick={() => openEditModal(bill)} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg shrink-0 hover:bg-amber-100"><Edit className="w-4 h-4" /></button>
+                                                    </>
+                                                )}
+                                                {isLegacy && (
+                                                    <span className="text-[10px] uppercase font-bold text-amber-500/50 tracking-widest px-2">IMPORTED</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                             {dateSegmented.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="px-5 py-12 text-center text-slate-400 font-medium tracking-wide">

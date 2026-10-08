@@ -41,6 +41,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     const [supplierId, setSupplierId] = useState<string>('')
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
     const [billRef, setBillRef] = useState('')
+    const [selectedSuppIdx, setSelectedSuppIdx] = useState(0)
     const filteredSuppliers = initialSuppliers.filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
     const [amountPaid, setAmountPaid] = useState('')
     const [receiptLang, setReceiptLang] = useState<'ENG' | 'MAR'>('MAR')
@@ -97,6 +98,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     // Current Row State
     const [searchQuery, setSearchQuery] = useState('')
     const [activeProduct, setActiveProduct] = useState<Product | null>(null)
+    const [selectedProdIdx, setSelectedProdIdx] = useState(0)
 
     const [isNewProduct, setIsNewProduct] = useState(false)
     const [formMrName, setFormMrName] = useState('')
@@ -129,19 +131,23 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     }
 
     const handleSearchKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setSelectedProdIdx(prev => Math.min(prev + 1, Math.min(filteredQueryProducts.length, 10) - 1))
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setSelectedProdIdx(prev => Math.max(prev - 1, 0))
+        } else if (e.key === 'Enter') {
             e.preventDefault()
             const query = searchQuery.trim().toLowerCase()
             if (!query) return
 
-            // 1. Check if exact match or grab top from filtered
             let match = initialProducts.find(p => p.name.toLowerCase() === query)
             if (!match && filteredQueryProducts.length > 0) {
-                match = filteredQueryProducts[0]
+                match = filteredQueryProducts[selectedProdIdx]
             }
 
             if (match) {
-                // Known product -> pull existing data
                 setSearchQuery(match.name)
                 setActiveProduct(match)
                 setIsNewProduct(false)
@@ -151,11 +157,8 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                 setFormQty('1')
                 setTimeout(() => qtyRef.current?.focus(), 50)
             } else {
-                // New Product Workflow
                 setActiveProduct(null)
                 setIsNewProduct(true)
-
-                // Auto-translate on the fly
                 const mrTranslation = await translateToMarathi(query)
                 setFormMrName(mrTranslation)
                 setFormQty('1')
@@ -201,11 +204,11 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
         // Wipe loop state and snap focus purely back to origin
         setSearchQuery('')
         setActiveProduct(null)
+        setSelectedProdIdx(0)
         setIsNewProduct(false)
         setFormMrName('')
         setFormBuy('')
         setFormSell('')
-        setFormQty('')
         setFormQty('')
         setTimeout(() => searchRef.current?.focus(), 50)
     }
@@ -345,6 +348,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
+                                tabIndex={1}
                                 ref={searchRef}
                                 type="text"
                                 value={searchQuery}
@@ -359,7 +363,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                             <div className="absolute top-full left-0 right-0 max-h-56 overflow-y-auto bg-white border border-slate-200 z-[9999] rounded-xl shadow-lg mt-1">
                                 {filteredQueryProducts.length === 0 ? (
                                     <div className="p-4 text-center text-slate-400 text-[13px] font-bold">New product will be generated. Press Enter.</div>
-                                ) : filteredQueryProducts.slice(0, 10).map(p => (
+                                ) : filteredQueryProducts.slice(0, 10).map((p, idx) => (
                                     <button
                                         key={p.id}
                                         onClick={() => {
@@ -372,7 +376,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                             setFormQty('1')
                                             setTimeout(() => qtyRef.current?.focus(), 50)
                                         }}
-                                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-50 text-left transition-colors cursor-pointer"
+                                        className={`w-full flex items-center justify-between px-4 py-3 border-b border-slate-50 text-left transition-colors cursor-pointer ${idx === selectedProdIdx ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-slate-50'}`}
                                     >
                                         <div className="flex flex-col">
                                             <p className="text-[14px] font-bold text-slate-800">{p.name}</p>
@@ -397,6 +401,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                         {isTranslating && <span className="animate-pulse">Translating...</span>}
                                     </label>
                                     <input
+                                        tabIndex={2}
                                         ref={marathiRef}
                                         type="text"
                                         value={formMrName}
@@ -411,6 +416,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                             <div className="w-[100px]">
                                 <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Quantity</label>
                                 <input
+                                    tabIndex={3}
                                     ref={qtyRef}
                                     type="number"
                                     value={formQty}
@@ -424,6 +430,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                             <div className="w-[120px]">
                                 <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Buy Rate</label>
                                 <input
+                                    tabIndex={4}
                                     ref={buyRateRef}
                                     type="number"
                                     value={formBuy}
@@ -438,6 +445,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                 <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Sell Rate</label>
                                 <div className="relative flex items-center">
                                     <input
+                                        tabIndex={5}
                                         ref={sellRateRef}
                                         type="number"
                                         value={formSell}
@@ -523,10 +531,18 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
 
                             {selectedSupplier ? (
                                 <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                                    <div>
+                                    <div className="flex-1">
                                         <p className="font-bold text-[14px] text-blue-900">{selectedSupplier.name}</p>
-                                        {selectedSupplier.id !== 'NEW' && <p className="text-[12px] text-blue-600 font-medium">Debt: ₹{parseFloat(selectedSupplier.current_balance || '0').toFixed(2)}</p>}
-                                        {selectedSupplier.id === 'NEW' && <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">Walk-in Vendor Setup</p>}
+                                        {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') > 0 && (
+                                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-100 text-rose-700 rounded-lg border border-rose-200">
+                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                <span className="text-[11px] font-black uppercase tracking-widest">Previous Due: ₹{parseFloat(selectedSupplier.current_balance || '0').toLocaleString('en-IN')}</span>
+                                            </div>
+                                        )}
+                                        {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') <= 0 && (
+                                            <p className="text-[12px] text-blue-600 font-medium">Debt: ₹0.00</p>
+                                        )}
+                                        {selectedSupplier.id === 'NEW' && <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mt-1">Walk-in Vendor Setup</p>}
                                     </div>
                                     <button onClick={() => { setSelectedSupplier(null); setSupplierId('') }} className="text-blue-400 hover:text-blue-700"><X className="w-4 h-4" /></button>
                                 </div>
@@ -538,13 +554,24 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                         value={supplierSearch}
                                         onChange={(e) => setSupplierSearch(e.target.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault()
+                                                setSelectedSuppIdx(prev => Math.min(prev + 1, Math.min(filteredSuppliers.length, 5))) // Max 5 + 1 for Add New
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault()
+                                                setSelectedSuppIdx(prev => Math.max(prev - 1, 0))
+                                            } else if (e.key === 'Enter') {
                                                 e.preventDefault()
                                                 if (e.ctrlKey) {
                                                     amountPaidRef.current?.focus()
                                                 } else if (supplierSearch && filteredSuppliers.length > 0) {
-                                                    setSelectedSupplier(filteredSuppliers[0])
-                                                    setSupplierId(filteredSuppliers[0].id)
+                                                    if (selectedSuppIdx < filteredSuppliers.length) {
+                                                        setSelectedSupplier(filteredSuppliers[selectedSuppIdx])
+                                                        setSupplierId(filteredSuppliers[selectedSuppIdx].id)
+                                                    } else {
+                                                        setSelectedSupplier({ id: 'NEW', name: supplierSearch, current_balance: '0' })
+                                                        setSupplierId('NEW')
+                                                    }
                                                     setSupplierSearch('')
                                                     amountPaidRef.current?.focus()
                                                 } else if (supplierSearch && filteredSuppliers.length === 0) {
@@ -561,18 +588,18 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                     {supplierSearch && (
                                         <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto">
                                             {filteredSuppliers.length === 0 ? (
-                                                <button onClick={() => { setSelectedSupplier({ id: 'NEW', name: supplierSearch, current_balance: '0' }); setSupplierId('NEW'); setSupplierSearch('') }} className="w-full text-left p-3 text-[12px] text-blue-600 font-bold hover:bg-slate-50 transition-colors">
+                                                <button onClick={() => { setSelectedSupplier({ id: 'NEW', name: supplierSearch, current_balance: '0' }); setSupplierId('NEW'); setSupplierSearch('') }} className={`w-full text-left p-3 text-[12px] font-bold transition-colors ${selectedSuppIdx === 0 ? 'bg-blue-50 text-blue-700' : 'text-blue-600 hover:bg-slate-50'}`}>
                                                     + Add '{supplierSearch}' as Vendor
                                                 </button>
                                             ) : (
                                                 <>
-                                                    {filteredSuppliers.slice(0, 5).map(s => (
-                                                        <button key={s.id} onClick={() => { setSelectedSupplier(s); setSupplierId(s.id); setSupplierSearch('') }} className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors border-b border-slate-50">
+                                                    {filteredSuppliers.slice(0, 5).map((s, idx) => (
+                                                        <button key={s.id} onClick={() => { setSelectedSupplier(s); setSupplierId(s.id); setSupplierSearch('') }} className={`w-full text-left px-3 py-2 transition-colors border-b border-slate-50 ${idx === selectedSuppIdx ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-blue-50'}`}>
                                                             <p className="text-[13px] font-semibold text-slate-800">{s.name}</p>
                                                             <p className="text-[11px] text-amber-600 font-medium">Debt: ₹{parseFloat(s.current_balance || '0').toFixed(2)}</p>
                                                         </button>
                                                     ))}
-                                                    <button onClick={() => { setSelectedSupplier({ id: 'NEW', name: supplierSearch, current_balance: '0' }); setSupplierId('NEW'); setSupplierSearch('') }} className="w-full text-left p-2 text-[11px] text-blue-500 font-bold hover:bg-slate-50 border-t border-slate-100">
+                                                    <button onClick={() => { setSelectedSupplier({ id: 'NEW', name: supplierSearch, current_balance: '0' }); setSupplierId('NEW'); setSupplierSearch('') }} className={`w-full text-left p-2 text-[11px] font-bold border-t border-slate-100 ${selectedSuppIdx === Math.min(filteredSuppliers.length, 5) ? 'bg-blue-50 text-blue-700' : 'text-blue-500 hover:bg-slate-50'}`}>
                                                         + Or Add '{supplierSearch}' as Vendor
                                                     </button>
                                                 </>

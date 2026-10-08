@@ -1,14 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { HandCoins, IndianRupee, Phone, Search, CheckCircle2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { HandCoins, IndianRupee, Phone, Search, CheckCircle2, TrendingUp, Plus, X } from 'lucide-react'
+import { addManualUdhaariDebt, createManualCustomer } from '../actions'
 
 export default function UdhaariClient({ customers, shopId }: { customers: any[], shopId: string }) {
     const [search, setSearch] = useState('')
     const [payingId, setPayingId] = useState<string | null>(null)
     const [payAmount, setPayAmount] = useState('')
+    const [addingId, setAddingId] = useState<string | null>(null)
+    const [addAmount, setAddAmount] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
     const totalUdhaari = customers.reduce((s, c) => s + parseFloat(c.old_balance || '0'), 0)
     const filtered = customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
@@ -35,6 +39,41 @@ export default function UdhaariClient({ customers, shopId }: { customers: any[],
         }
     }
 
+    async function handleRecordDebt(customerId: string) {
+        const amount = parseFloat(addAmount)
+        if (!amount || amount <= 0) return alert('Enter a valid debt amount')
+        setIsSubmitting(true)
+        try {
+            const res = await addManualUdhaariDebt(customerId, amount)
+            if (res.success) {
+                setAddingId(null)
+                setAddAmount('')
+                window.location.reload()
+            }
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    async function handleAddClient(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        const formData = new FormData(e.currentTarget)
+        setIsSubmitting(true)
+        try {
+            const res = await createManualCustomer(formData)
+            if (res.success) {
+                setIsAddModalOpen(false)
+                window.location.reload()
+            }
+        } catch (e: any) {
+            alert(e.message)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
     return (
         <div className="space-y-6 pb-20">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -44,6 +83,12 @@ export default function UdhaariClient({ customers, shopId }: { customers: any[],
                     </h1>
                     <p className="text-[13px] text-slate-500 mt-1">Live credit balances across all B2B buyers. Record payments to reduce outstanding debts.</p>
                 </div>
+                <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="h-11 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[13px] font-bold shadow-md shadow-slate-900/20 flex items-center gap-2 transition-all active:scale-95"
+                >
+                    <Plus className="w-4 h-4" /> Add Walk-In Client
+                </button>
             </div>
 
             {/* Stats */}
@@ -108,10 +153,26 @@ export default function UdhaariClient({ customers, shopId }: { customers: any[],
                                                     </button>
                                                     <button onClick={() => { setPayingId(null); setPayAmount('') }} className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[13px] font-bold rounded-lg transition-all">Cancel</button>
                                                 </div>
+                                            ) : addingId === c.id ? (
+                                                <div className="flex items-center gap-2 justify-end">
+                                                    <div className="relative">
+                                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                                        <input autoFocus type="number" value={addAmount} onChange={e => setAddAmount(e.target.value)} placeholder="0" className="w-28 pl-6 pr-2 h-9 border-2 border-rose-300 rounded-lg text-[13px] font-bold focus:border-rose-500 outline-none" />
+                                                    </div>
+                                                    <button onClick={() => handleRecordDebt(c.id)} disabled={isSubmitting} className="h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-bold rounded-lg flex items-center gap-1 transition-all disabled:opacity-50">
+                                                        <TrendingUp className="w-4 h-4" /> Add
+                                                    </button>
+                                                    <button onClick={() => { setAddingId(null); setAddAmount('') }} className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[13px] font-bold rounded-lg transition-all">Cancel</button>
+                                                </div>
                                             ) : (
-                                                <button onClick={() => setPayingId(c.id)} disabled={bal <= 0} className="px-4 py-2 bg-white border border-slate-200 shadow-sm text-[13px] font-semibold text-slate-600 rounded-lg hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 disabled:opacity-30 transition-all active:scale-95">
-                                                    Record Payment
-                                                </button>
+                                                <div className="flex items-center gap-2 justify-end">
+                                                    <button onClick={() => { setPayingId(c.id); setAddingId(null) }} disabled={bal <= 0} className="px-4 py-2 bg-white border border-slate-200 shadow-sm text-[13px] font-semibold text-slate-600 rounded-lg hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 disabled:opacity-30 transition-all active:scale-95 whitespace-nowrap">
+                                                        Payment
+                                                    </button>
+                                                    <button onClick={() => { setAddingId(c.id); setPayingId(null) }} className="px-4 py-2 bg-white border border-slate-200 shadow-sm text-[13px] font-semibold text-slate-600 rounded-lg hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-all active:scale-95 whitespace-nowrap">
+                                                        Add Debt
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
                                     </motion.tr>
@@ -121,6 +182,45 @@ export default function UdhaariClient({ customers, shopId }: { customers: any[],
                     </table>
                 </div>
             </div>
-        </div>
+
+            {/* Add Walk-In Client Modal */}
+            <AnimatePresence>
+                {isAddModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSubmitting && setIsAddModalOpen(false)} />
+                        <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white rounded-3xl w-full max-w-md overflow-hidden relative z-10 shadow-2xl">
+                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                                    <Plus className="w-4 h-4 text-indigo-500" /> New Walk-In Client
+                                </h3>
+                                <button disabled={isSubmitting} onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"><X className="w-4 h-4" /></button>
+                            </div>
+                            <form onSubmit={handleAddClient} className="p-6 space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Client Name</label>
+                                    <input autoFocus required type="text" name="name" className="w-full px-4 h-11 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-[14px] font-semibold text-slate-900 transition-all outline-none" placeholder="e.g Rahul Kirana" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Phone Number (Optional)</label>
+                                    <input type="tel" name="phone" className="w-full px-4 h-11 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-[14px] font-medium text-slate-900 transition-all outline-none" placeholder="10-digit number" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Opening Due Balance (₹)</label>
+                                    <div className="relative">
+                                        <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                        <input required min="0" step="0.01" type="number" defaultValue={0} name="oldBalance" className="w-full pl-10 pr-4 h-11 bg-white border border-slate-200 focus:border-amber-500 rounded-xl text-[14px] font-bold text-slate-900 transition-all outline-none shadow-inner" placeholder="0.00" />
+                                    </div>
+                                </div>
+                                <div className="pt-4">
+                                    <button type="submit" disabled={isSubmitting} className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[14px] rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+                                        {isSubmitting ? 'CREATING...' : 'CREATE ACCOUNT'}
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div >
     )
 }

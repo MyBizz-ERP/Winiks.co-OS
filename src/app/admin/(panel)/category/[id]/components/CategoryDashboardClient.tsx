@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Server, Activity, Power, PowerOff, Building2, Phone, AlertCircle, HardDrive, Package, Users, Receipt, ArrowLeft, ArrowUpRight, Copy, Plus, X, Key } from 'lucide-react'
+import { Server, Activity, Power, PowerOff, Building2, Phone, AlertCircle, HardDrive, Package, Users, Receipt, ArrowLeft, ArrowUpRight, Copy, Plus, X, Key, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { performAdminAction } from '../../../../actions'
 import { useState } from 'react'
@@ -27,6 +27,16 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [provisionSuccess, setProvisionSuccess] = useState<{ shopId: string, password: string } | null>(null)
 
+    // Deletion Modal State
+    const [shopToDelete, setShopToDelete] = useState<{ id: string, name: string, code: string } | null>(null)
+    const [deleteInput, setDeleteInput] = useState('')
+    const [isDeleting, setIsDeleting] = useState(false)
+
+    // Reset Modal State
+    const [shopToReset, setShopToReset] = useState<{ id: string, name: string, code: string } | null>(null)
+    const [resetInput, setResetInput] = useState('')
+    const [isResetting, setIsResetting] = useState(false)
+
     // Format proper readable title
     const categoryTitle = categoryId === 'wholesale' ? 'Wholesale B2B' :
         categoryId === 'salon' ? 'Salon & Parlour' :
@@ -50,6 +60,53 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
             alert(error.message)
         } finally {
             setIsSubmitting(false)
+        }
+    }
+
+    async function handleResetSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        if (!shopToReset) return
+        if (resetInput !== '2004') { // Strict Date of Birth Verification Check
+            alert('SECURITY LOCK: Invalid Date of Birth provided.')
+            return
+        }
+
+        setIsResetting(true)
+        try {
+            const formData = new FormData()
+            formData.append('actionType', 'reset_tenant_credentials')
+            formData.append('shopId', shopToReset.id)
+            const res = await performAdminAction(formData)
+            if (res && res.success && res.credentials) {
+                setShopToReset(null)
+                setResetInput('')
+                setProvisionSuccess(res.credentials)
+            }
+        } catch (error: any) {
+            alert(error.message)
+        } finally {
+            setIsResetting(false)
+        }
+    }
+
+    async function handleDeleteSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        if (!shopToDelete || deleteInput !== shopToDelete.code) return
+
+        setIsDeleting(true)
+        try {
+            const formData = new FormData()
+            formData.append('actionType', 'delete_tenant')
+            formData.append('shopId', shopToDelete.id)
+            const res = await performAdminAction(formData)
+            if (res && res.success) {
+                setShopToDelete(null)
+                setDeleteInput('')
+            }
+        } catch (error: any) {
+            alert(error.message)
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -222,16 +279,15 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
                                                 >
                                                     <Key className="w-4 h-4" />
                                                 </button>
-                                                <form action={handleProvision}>
-                                                    <input type="hidden" name="actionType" value="reset_tenant_credentials" />
-                                                    <input type="hidden" name="shopId" value={shop.id} />
-                                                    <button
-                                                        type="submit"
-                                                        className="px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-2 shadow-sm active:scale-95 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200"
-                                                    >
-                                                        Rotate Keys
-                                                    </button>
-                                                </form>
+                                                <button
+                                                    onClick={() => {
+                                                        setShopToReset({ id: shop.id, name: shop.name, code: shop.tenant_code || shop.id.split('-')[0] })
+                                                        setResetInput('')
+                                                    }}
+                                                    className="px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-2 shadow-sm active:scale-95 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200"
+                                                >
+                                                    Rotate Keys
+                                                </button>
 
                                                 <form action={async (fd) => { await performAdminAction(fd) }}>
                                                     <input type="hidden" name="actionType" value="toggle_status" />
@@ -251,6 +307,17 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
                                                         )}
                                                     </button>
                                                 </form>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setShopToDelete({ id: shop.id, name: shop.name, code: shop.tenant_code || shop.id.split('-')[0] })
+                                                        setDeleteInput('')
+                                                    }}
+                                                    className="px-3 py-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all font-semibold text-[13px] shadow-sm bg-white ml-2"
+                                                    title="Permanently Drop Node"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </td>
                                     </motion.tr>
@@ -392,6 +459,130 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* DANGEROUS DELETION MODAL */}
+            <AnimatePresence>
+                {shopToDelete && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => !isDeleting && setShopToDelete(null)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            className="bg-white border-2 border-red-500 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl shadow-red-600/20 relative z-10 flex flex-col p-6 text-left"
+                        >
+                            <div className="flex items-center gap-3 mb-4 text-red-600">
+                                <AlertCircle className="w-6 h-6 shrink-0" />
+                                <h3 className="text-[17px] font-bold tracking-tight text-slate-900 leading-tight">Destroy Organizational Node?</h3>
+                            </div>
+
+                            <p className="text-[13px] text-slate-500 mb-5 leading-relaxed bg-red-50 p-3 rounded-lg border border-red-100 font-medium">
+                                This will permanently vaporize <strong className="text-slate-800">{shopToDelete.name}</strong>, their database records, products, physical invoices, and Auth Identity. This action is <strong>unrecoverable</strong>.
+                            </p>
+
+                            <form onSubmit={handleDeleteSubmit} className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Type "{shopToDelete.code}" to confirm</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={deleteInput}
+                                        onChange={e => setDeleteInput(e.target.value)}
+                                        placeholder={shopToDelete.code}
+                                        className="w-full px-4 h-11 bg-white border border-slate-300 shadow-inner rounded-xl text-[14px] font-mono tracking-widest outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all text-center uppercase"
+                                    />
+                                </div>
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        type="button"
+                                        disabled={isDeleting}
+                                        onClick={() => setShopToDelete(null)}
+                                        className="flex-1 px-4 py-2.5 rounded-xl text-slate-500 font-semibold hover:bg-slate-100 transition-colors text-[13px]"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isDeleting || deleteInput !== shopToDelete.code}
+                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[13px] rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                                    >
+                                        {isDeleting ? <Activity className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4" /> Drop Node</>}
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Reset Credentials Security Modal */}
+            <AnimatePresence>
+                {shopToReset && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => !isResetting && setShopToReset(null)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            className="bg-white border border-slate-200 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative z-10"
+                        >
+                            <div className="p-5 border-b border-rose-100 flex justify-between items-center bg-rose-50/50">
+                                <h2 className="text-[16px] font-bold text-slate-900 flex items-center gap-2">
+                                    <Key className="w-4 h-4 text-rose-600" /> Rotate Master Keys
+                                </h2>
+                                <button disabled={isResetting} onClick={() => setShopToReset(null)} className="text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleResetSubmit} className="p-6 space-y-5">
+                                <div className="space-y-2">
+                                    <p className="text-[13px] font-medium text-slate-700 leading-relaxed">
+                                        You are executing a Force Credential Overwrite for <span className="font-bold text-slate-900">{shopToReset.name}</span>.
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5 p-4 bg-slate-50 border border-slate-200 rounded-xl relative overflow-hidden">
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+                                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Admin Authorization</label>
+                                    <p className="text-[12px] text-slate-600 mb-2 font-medium">To unlock, enter SuperAdmin Date of Birth:</p>
+                                    <input
+                                        type="password"
+                                        placeholder="YYYY"
+                                        value={resetInput}
+                                        onChange={e => setResetInput(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-rose-600 font-mono tracking-widest text-[14px] font-bold focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all placeholder:text-slate-300"
+                                        autoComplete="off"
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isResetting || !resetInput}
+                                    className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[13px] rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    <Key className="w-4 h-4" />
+                                    {isResetting ? 'ROTATING...' : 'AUTHORIZE KEY OVERWRITE'}
+                                </button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
         </motion.div>
     )
 }
