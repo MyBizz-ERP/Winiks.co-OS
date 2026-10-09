@@ -104,13 +104,13 @@ export default function SharedThermalReceipt({
                     {isMar && shopInfo.address_mr ? shopInfo.address_mr : (shopInfo.address || "Address")}
                 </p>
                 <p className="text-xs font-sans text-slate-800">Contact: {shopInfo.phone || ""}</p>
-                <hr className={`my-3 border-dashed ${variant === 'purchase' ? 'border-slate-300' : 'border-slate-400'}`} />
+                <hr className={`my-3 border-solid ${variant === 'purchase' ? 'border-slate-300' : 'border-slate-400'}`} />
                 {variant === 'purchase' && (
                     <p className="text-xs font-bold mt-1">** {t.purchaseTitle} **</p>
                 )}
             </div>
 
-            <div className={`flex justify-between text-xs mb-3 font-bold ${variant === 'purchase' ? 'border-b border-dashed border-slate-300 pb-2' : 'mb-4'}`}>
+            <div className={`flex justify-between text-xs mb-3 font-bold ${variant === 'purchase' ? 'border-b border-solid border-slate-300 pb-2' : 'mb-4'}`}>
                 <div>
                     <p><strong>{t.billNo}:</strong> {billRef || '#INV-PREVIEW'}</p>
                     <p><strong>{t.date}:</strong> {hydrated ? (timestamp ? new Date(timestamp).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')) : '--/--/----'}</p>
@@ -121,14 +121,14 @@ export default function SharedThermalReceipt({
             </div>
 
             {customerOrSupplierName && (
-                <div className={`text-xs font-bold mb-3 ${variant === 'purchase' ? 'border-b border-dashed border-slate-300 pb-2 uppercase text-left' : 'p-2 bg-slate-50 border border-slate-200 rounded'}`}>
+                <div className={`text-xs font-bold mb-3 ${variant === 'purchase' ? 'border-b border-solid border-slate-300 pb-2 uppercase text-left' : 'p-2 bg-slate-50 border border-slate-200 rounded'}`}>
                     <p>{t.entityLabel}: {customerOrSupplierName}</p>
                 </div>
             )}
 
             <table className={`w-full text-[11px] mb-3 ${variant === 'purchase' ? 'text-left' : ''}`}>
                 <thead>
-                    <tr className={`${variant === 'purchase' ? 'border-b border-black uppercase font-bold' : 'border-y border-dashed border-slate-400 font-bold'}`}>
+                    <tr className={`${variant === 'purchase' ? 'border-b border-black uppercase font-bold' : 'border-y border-solid border-slate-400 font-bold'}`}>
                         <th className={`py-1 w-8 pr-1 text-left`}>{t.sn}</th>
                         <th className={`py-1 pl-1 ${variant === 'purchase' ? 'w-5/12 text-left' : 'text-left'}`}>{t.item}</th>
                         <th className={`py-1 ${variant === 'purchase' ? 'w-2/12 text-center' : 'text-center'}`}>{t.qty}</th>
@@ -145,7 +145,7 @@ export default function SharedThermalReceipt({
                         const ItemTotal = variant === 'purchase' ? item.total : (item.qty * item.rate);
 
                         return (
-                            <tr key={item.tempId || item.id || idx} className={`border-b ${variant === 'purchase' ? 'border-dashed border-slate-200' : 'border-slate-100 border-dashed'}`}>
+                            <tr key={item.tempId || item.id || idx} className={`border-b ${variant === 'purchase' ? 'border-solid border-slate-200' : 'border-slate-100 border-solid'}`}>
                                 <td className="py-1 pr-1 font-bold text-slate-500 text-left">{idx + 1}</td>
                                 <td className={`py-1 pl-1 pr-1 font-bold truncate ${variant === 'purchase' ? 'max-w-[70px]' : 'max-w-[85px]'}`}>{ItemName}</td>
                                 <td className="py-1 text-center font-bold px-1">{ItemQty}</td>
@@ -159,7 +159,7 @@ export default function SharedThermalReceipt({
                 </tbody>
             </table>
 
-            {variant === 'sale' && <hr className="my-2 border-dashed border-slate-400" />}
+            {variant === 'sale' && <hr className="my-2 border-solid border-slate-400" />}
 
             <div className={`${variant === 'purchase' ? 'border-t-2 border-black pt-2 mb-4' : 'space-y-1 text-right text-xs'}`}>
                 {/* Sale Math Block vs Purchase Math Block */}
@@ -208,7 +208,7 @@ export default function SharedThermalReceipt({
                             <span>₹{subtotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                         </div>
                         {amountPaid > 0 && (
-                            <div className="flex justify-between text-[11px] font-bold mt-1 text-slate-600 border-t border-dashed border-slate-300 pt-2 text-right w-full">
+                            <div className="flex justify-between text-[11px] font-bold mt-1 text-slate-600 border-t border-solid border-slate-300 pt-2 text-right w-full">
                                 <span className="w-full text-right">{t.amountPaid}: ₹{amountPaid.toFixed(2)}</span>
                             </div>
                         )}
@@ -217,10 +217,10 @@ export default function SharedThermalReceipt({
             </div>
 
             {variant === 'sale' ? (
-                <hr className="my-6 border-dashed border-slate-400" />
+                <hr className="my-6 border-solid border-slate-400" />
             ) : null}
 
-            <div className={`text-center ${variant === 'purchase' ? 'mt-6 border-t border-dashed border-slate-300 pt-3' : 'text-xs text-slate-600'}`}>
+            <div className={`text-center ${variant === 'purchase' ? 'mt-6 border-t border-solid border-slate-300 pt-3' : 'text-xs text-slate-600'}`}>
                 <p className={`${variant === 'purchase' ? 'text-[10px] font-bold' : 'font-bold mb-1'}`}>{t.thanks}</p>
                 <p className={`text-[10px] ${variant === 'purchase' ? 'font-bold' : ''}`}>{t.power}</p>
             </div>
