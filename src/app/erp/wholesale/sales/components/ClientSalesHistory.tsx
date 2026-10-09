@@ -24,12 +24,18 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
             if (!element) return
 
             const dataUrl = await toPng(element, { quality: 1, backgroundColor: '#ffffff', pixelRatio: 2 })
+
+            const pxWidth = element.offsetWidth
+            const pxHeight = element.offsetHeight
+            const pdfWidthInches = 3.15 // Standard 80mm
+            const pdfHeightInches = (pxHeight / pxWidth) * pdfWidthInches
+
             const pdf = new jsPDF({
                 unit: 'in',
-                format: [3.2, 5.5],
+                format: [pdfWidthInches, pdfHeightInches],
                 orientation: 'portrait'
             })
-            pdf.addImage(dataUrl, 'PNG', 0, 0, 3.2, 5.5)
+            pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidthInches, pdfHeightInches)
             pdf.save(`Sales_Invoice_${printData.invoice.invoice_no || printData.invoice.id}.pdf`)
         } catch (e) {
             console.error(e)
