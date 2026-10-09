@@ -22,10 +22,29 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
             const element = document.getElementById('receipt-pdf-target-ap')
             if (!element) return
 
-            const dataUrl = await toPng(element, { quality: 1, backgroundColor: '#ffffff', pixelRatio: 2 })
+            const parentNode = element.parentElement
+            if (parentNode) {
+                parentNode.style.overflow = 'visible'
+                parentNode.style.height = 'max-content'
+            }
 
-            const pxWidth = element.offsetWidth
-            const pxHeight = element.offsetHeight
+            const pxWidth = element.scrollWidth
+            const pxHeight = element.scrollHeight
+
+            const dataUrl = await toPng(element, {
+                quality: 1,
+                backgroundColor: '#ffffff',
+                pixelRatio: 2,
+                width: pxWidth,
+                height: pxHeight,
+                style: { margin: '0' }
+            })
+
+            if (parentNode) {
+                parentNode.style.overflow = ''
+                parentNode.style.height = '400px'
+            }
+
             const pdfWidthInches = 3.15 // Standard 80mm
             const pdfHeightInches = (pxHeight / pxWidth) * pdfWidthInches
 
