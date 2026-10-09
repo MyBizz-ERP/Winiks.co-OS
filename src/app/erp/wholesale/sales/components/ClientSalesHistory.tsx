@@ -18,17 +18,19 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
     const handleDownloadPDF = async () => {
         setIsExportingPDF(true)
         try {
-            const html2pdf = (await import('html2pdf.js')).default
+            const { toPng } = await import('html-to-image')
+            const { jsPDF } = await import('jspdf')
             const element = document.getElementById('receipt-pdf-target-sales')
             if (!element) return
-            const opt = {
-                margin: 0.2,
-                filename: `Sales_Invoice_${printData.invoice.invoice_no || printData.invoice.id}.pdf`,
-                image: { type: 'jpeg' as const, quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'in', format: [3.2, 5.5] as [number, number], orientation: 'portrait' as const }
-            }
-            await html2pdf().from(element).set(opt).save()
+
+            const dataUrl = await toPng(element, { quality: 1, backgroundColor: '#ffffff', pixelRatio: 2 })
+            const pdf = new jsPDF({
+                unit: 'in',
+                format: [3.2, 5.5],
+                orientation: 'portrait'
+            })
+            pdf.addImage(dataUrl, 'PNG', 0, 0, 3.2, 5.5)
+            pdf.save(`Sales_Invoice_${printData.invoice.invoice_no || printData.invoice.id}.pdf`)
         } catch (e) {
             console.error(e)
         } finally {
