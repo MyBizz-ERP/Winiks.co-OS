@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { db } from '@/db'
 import { purchaseBills, purchaseItems, products, suppliers } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 export async function POST(req: Request) {
     try {
@@ -45,14 +45,18 @@ export async function POST(req: Request) {
             }
 
             // 2. Create Purchase Bill
+            const [seqResult] = await tx.select({ maxSeq: sql<number>`COALESCE(MAX(purchase_no), 0)` }).from(purchaseBills).where(eq(purchaseBills.shop_id, shopId))
+            const nextSeq = (seqResult?.maxSeq || 0) + 1
+
             const [newBill] = await tx.insert(purchaseBills).values({
                 shop_id: shopId,
+                purchase_no: nextSeq,
                 supplier_id: targetSupplierId,
-                total_amount: totalAmount.toString(),
-                amount_paid: amountPaid.toString(),
+                total_amount: Math.round(totalAmount).toString(),
+                amount_paid: Math.round(amountPaid).toString(),
                 payment_method: paymentMethod || 'CASH',
                 // could add bill_ref if added to schema, otherwise ignore for now
-            }).returning({ id: purchaseBills.id })
+            }).returning({ id: purchaseBills.id, purchase_no: purchaseBills.purchase_no })
 
             // 3. Process Items & Update Inventory
             for (const item of cart) {
@@ -98,7 +102,7 @@ export async function POST(req: Request) {
             }
 
             // 4. Update Supplier Balance (Added/Subtracted Debt)
-            const debtAdded = totalAmount - amountPaid
+            const debtAdded = Math.round(totalAmount - amountPaid)
             const existingSupplier = await tx.query.suppliers.findFirst({
                 where: (s, { eq }) => eq(s.id, targetSupplierId)
             })

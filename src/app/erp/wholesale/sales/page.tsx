@@ -17,6 +17,7 @@ export default async function SalesHistoryPage() {
 
     const result = await db.select({
         id: invoices.id,
+        invoice_no: invoices.invoice_no,
         created_at: invoices.created_at,
         subtotal: invoices.subtotal,
         discount: invoices.discount,
@@ -49,6 +50,7 @@ export default async function SalesHistoryPage() {
     const serializedBills = result.map(i => ({
         ...i,
         type: 'BILL',
+        invoice_no: i.invoice_no,
         payment_method: i.payment_method,
         subtotal: parseFloat(i.subtotal as any),
         discount: parseFloat(i.discount as any),

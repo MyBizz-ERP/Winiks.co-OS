@@ -17,6 +17,7 @@ export default async function AccountsPayablePage() {
 
     const result = await db.select({
         id: purchaseBills.id,
+        purchase_no: purchaseBills.purchase_no,
         created_at: purchaseBills.created_at,
         total_amount: purchaseBills.total_amount,
         amount_paid: purchaseBills.amount_paid,
@@ -49,6 +50,7 @@ export default async function AccountsPayablePage() {
     const serializedBills = result.map(i => ({
         ...i,
         type: 'BILL',
+        purchase_no: i.purchase_no,
         payment_method: i.payment_method,
         total_amount: parseFloat(i.total_amount as any),
         amount_paid: parseFloat(i.amount_paid as any),

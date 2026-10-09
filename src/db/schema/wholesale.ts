@@ -1,4 +1,4 @@
-import { pgSchema, text, timestamp, uuid, decimal, integer, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, text, timestamp, uuid, decimal, integer, boolean, serial } from "drizzle-orm/pg-core";
 import { shops } from "./admin";
 
 export const wholesaleSchema = pgSchema("wholesale");
@@ -37,6 +37,7 @@ export const customerPayments = wholesaleSchema.table("customer_payments", {
 
 export const invoices = wholesaleSchema.table("invoices", {
     id: uuid("id").primaryKey().defaultRandom(),
+    invoice_no: integer("invoice_no").default(0).notNull(),
     shop_id: uuid("shop_id").references(() => shops.id, { onDelete: 'cascade' }).notNull(),
     customer_id: uuid("customer_id").references(() => customers.id),
     subtotal: decimal("subtotal", { precision: 12, scale: 2 }).default("0").notNull(),
@@ -78,6 +79,7 @@ export const supplierPayments = wholesaleSchema.table("supplier_payments", {
 
 export const purchaseBills = wholesaleSchema.table("purchase_bills", {
     id: uuid("id").primaryKey().defaultRandom(),
+    purchase_no: integer("purchase_no").default(0).notNull(),
     shop_id: uuid("shop_id").references(() => shops.id, { onDelete: 'cascade' }).notNull(),
     supplier_id: uuid("supplier_id").references(() => suppliers.id).notNull(),
     total_amount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),

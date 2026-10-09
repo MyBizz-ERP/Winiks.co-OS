@@ -295,24 +295,29 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                 body: JSON.stringify(payload)
             })
 
+            const data = await res.json()
             if (!res.ok) {
-                const data = await res.json()
                 throw new Error(data.error || 'Purchase sync failed.')
             }
 
-            // Execute local thermal print buffer before wiping state map
-            window.print()
+            if (data.purchase_no) {
+                setBillRef(`INV-P${data.purchase_no.toString().padStart(4, '0')}`)
+            }
 
-            // Simulated DB cache clear
-            setCart([])
-            setSupplierId('')
-            setSupplierSearch('')
-            setBillRef('')
-            setAmountPaid('')
+            // Await React DOM paint before triggering block thread
+            setTimeout(() => {
+                window.print()
+                setCart([])
+                setSupplierId('')
+                setSupplierSearch('')
+                setBillRef('')
+                setAmountPaid('')
+                setIsSubmitting(false)
+            }, 600)
+            return
 
         } catch (e: any) {
             alert(e.message)
-        } finally {
             setIsSubmitting(false)
         }
     }

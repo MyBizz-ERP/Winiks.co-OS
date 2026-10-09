@@ -12,7 +12,29 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
     const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL')
     const [selectedInvoices, setSelectedInvoices] = useState<string[]>([])
     const [hasDownloaded, setHasDownloaded] = useState(false)
+    const [isExportingPDF, setIsExportingPDF] = useState(false)
     const router = useRouter()
+
+    const handleDownloadPDF = async () => {
+        setIsExportingPDF(true)
+        try {
+            const html2pdf = (await import('html2pdf.js')).default
+            const element = document.getElementById('receipt-pdf-target-sales')
+            if (!element) return
+            const opt = {
+                margin: 0.2,
+                filename: `Sales_Invoice_${printData.invoice.invoice_no || printData.invoice.id}.pdf`,
+                image: { type: 'jpeg' as const, quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: [3.2, 5.5] as [number, number], orientation: 'portrait' as const }
+            }
+            await html2pdf().from(element).set(opt).save()
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setIsExportingPDF(false)
+        }
+    }
 
     const handleVoidAndClone = async (id: string) => {
         if (!confirm('Are you absolutely sure you want to VOID this official tax invoice and move it back to the active POS? This will instantly reverse all stock and Udhaari.')) return
@@ -231,7 +253,7 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                                         </td>
                                         <td className="px-5 py-4">
                                             <div className={`font-mono font-bold text-[12px] ${isLegacy ? 'text-amber-700' : 'text-slate-900'}`}>
-                                                {isPayment ? 'CASH PMT' : isLegacy ? 'OPENING BALANCE' : bill.id.split('-')[0].toUpperCase()}
+                                                {isPayment ? 'CASH PMT' : isLegacy ? 'OPENING BALANCE' : (bill.invoice_no ? `INV-S${bill.invoice_no.toString().padStart(4, '0')}` : bill.id.split('-')[0].toUpperCase())}
                                             </div>
                                             <div className="text-slate-500 text-[11px] mt-0.5">{format(new Date(bill.created_at), 'dd MMM yy, hh:mm a')}</div>
                                         </td>
@@ -339,12 +361,12 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                             <button onClick={() => setPrintData(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="p-6 h-[400px] overflow-y-auto bg-slate-50 flex justify-center pb-12">
-                            <div className="w-[80mm] bg-white shadow-sm p-4 relative" style={{ minHeight: '100px' }}>
+                            <div id="receipt-pdf-target-sales" className="w-[80mm] bg-white shadow-sm p-4 relative" style={{ minHeight: '100px' }}>
                                 <SharedThermalReceipt
                                     variant="sale"
                                     language="MAR" // Defaulting to ENG for reprint
                                     shopInfo={shop}
-                                    billRef={`INV-S0${printData.invoice.id.split('-')[0].toUpperCase()}`}
+                                    billRef={printData.invoice.invoice_no ? `INV-S${printData.invoice.invoice_no.toString().padStart(4, '0')}` : `INV-S0${printData.invoice.id.split('-')[0].toUpperCase()}`}
                                     customerOrSupplierName={printData.customerName}
                                     cart={printData.items.map((i: any) => ({ ...i, qty: Number(i.qty), rate: Number(i.rate) }))}
                                     subtotal={parseFloat(printData.invoice.subtotal)}
@@ -357,9 +379,12 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                                 />
                             </div>
                         </div>
-                        <div className="p-4 border-t border-slate-100 bg-white">
-                            <button onClick={() => window.print()} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md hover:-translate-y-0.5 active:scale-95 transition-all">
-                                <Printer className="w-4 h-4" /> Export to Thermal
+                        <div className="p-4 border-t border-slate-100 bg-white grid grid-cols-2 gap-3">
+                            <button onClick={() => window.print()} className="w-full h-12 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-slate-200">
+                                <Printer className="w-4 h-4" /> Thermal Print
+                            </button>
+                            <button onClick={handleDownloadPDF} disabled={isExportingPDF} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md hover:-translate-y-0.5 active:scale-95 transition-all disabled:opacity-50">
+                                <Download className="w-4 h-4" /> {isExportingPDF ? 'Exporting...' : 'PDF Download'}
                             </button>
                         </div>
                     </div>
@@ -373,7 +398,7 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                             variant="sale"
                             language="MAR" // Defaulting to ENG for reprint
                             shopInfo={shop}
-                            billRef={`INV-S0${printData.invoice.id.split('-')[0].toUpperCase()}`}
+                            billRef={printData.invoice.invoice_no ? `INV-S${printData.invoice.invoice_no.toString().padStart(4, '0')}` : `INV-S0${printData.invoice.id.split('-')[0].toUpperCase()}`}
                             customerOrSupplierName={printData.customerName}
                             cart={printData.items.map((i: any) => ({ ...i, qty: Number(i.qty), rate: Number(i.rate) }))}
                             subtotal={parseFloat(printData.invoice.subtotal)}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { shops, products, customers, invoices, invoiceItems } from '@/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { createClient } from '@/utils/supabase/server'
 
 export async function POST(req: NextRequest) {
@@ -31,17 +31,22 @@ export async function POST(req: NextRequest) {
             totalCogs += (parseFloat(product?.buy_rate || '0') * item.qty)
         }
 
+        // Generate sequential invoice no
+        const [seqResult] = await db.select({ maxSeq: sql<number>`COALESCE(MAX(invoice_no), 0)` }).from(invoices).where(eq(invoices.shop_id, shop.id))
+        const nextSeq = (seqResult?.maxSeq || 0) + 1
+
         // Create invoice
         const [invoice] = await db.insert(invoices).values({
             shop_id: shop.id,
+            invoice_no: nextSeq,
             customer_id: finalCustomerId === 'NEW' ? null : (finalCustomerId || null),
-            subtotal: subtotal.toString(),
-            total_amount: netTotal.toString(),
-            discount: discount.toString(),
+            subtotal: Math.round(subtotal).toString(),
+            total_amount: Math.round(netTotal).toString(),
+            discount: Math.round(discount).toString(),
             total_cogs: totalCogs.toString(),
-            amount_paid: amountPaid.toString(),
+            amount_paid: Math.round(amountPaid).toString(),
             payment_method: paymentMethod || 'CASH',
-        }).returning({ id: invoices.id })
+        }).returning({ id: invoices.id, invoice_no: invoices.invoice_no })
 
         // Create invoice items + deduct stock
         for (const item of cart) {

@@ -568,7 +568,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                     variant="sale"
                     language={receiptLang}
                     shopInfo={shop || { name: 'YOUR SHOP NAME' }}
-                    billRef={completedBill?.id}
+                    billRef={completedBill?.invoice_no ? `INV-S${completedBill.invoice_no.toString().padStart(4, '0')}` : completedBill?.id}
                     customerOrSupplierName={completedBill?.customer?.name || selectedCustomer?.name}
                     cart={completedBill?.cart || cart}
                     subtotal={completedBill?.subtotal || subtotal}
@@ -595,7 +595,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                     variant="sale"
                                     language={receiptLang}
                                     shopInfo={shop || { name: 'YOUR SHOP NAME' }}
-                                    billRef={completedBill?.id || previewBillNo}
+                                    billRef={completedBill?.invoice_no ? `INV-S${completedBill.invoice_no.toString().padStart(4, '0')}` : (completedBill?.id || previewBillNo)}
                                     customerOrSupplierName={selectedCustomer?.name}
                                     cart={cart}
                                     subtotal={subtotal}
