@@ -401,7 +401,7 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                                     netPayable={parseFloat(printData.invoice.total_amount)}
                                     amountPaid={parseFloat(printData.invoice.amount_paid)}
                                     newDueAdded={parseFloat(printData.invoice.total_amount) - parseFloat(printData.invoice.amount_paid)}
-                                    oldDue={printData.customerOldDue}
+                                    oldDue={printData.customerOldDue - (parseFloat(printData.invoice.total_amount) - parseFloat(printData.invoice.amount_paid))}
                                     timestamp={printData.invoice.created_at}
                                 />
                             </div>
@@ -433,7 +433,7 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                             netPayable={parseFloat(printData.invoice.total_amount)}
                             amountPaid={parseFloat(printData.invoice.amount_paid)}
                             newDueAdded={parseFloat(printData.invoice.total_amount) - parseFloat(printData.invoice.amount_paid)}
-                            oldDue={printData.customerOldDue}
+                            oldDue={printData.customerOldDue - (parseFloat(printData.invoice.total_amount) - parseFloat(printData.invoice.amount_paid))}
                             timestamp={printData.invoice.created_at}
                         />
                     </div>

@@ -149,9 +149,9 @@ export default function SharedThermalReceipt({
                                 <td className="py-1 pr-1 font-bold text-slate-500 text-left">{idx + 1}</td>
                                 <td className={`py-1 pl-1 pr-1 font-bold truncate ${variant === 'purchase' ? 'max-w-[70px]' : 'max-w-[85px]'}`}>{ItemName}</td>
                                 <td className="py-1 text-center font-bold px-1">{ItemQty}</td>
-                                <td className="py-1 text-right">{Number(ItemRate).toFixed(0)}</td>
+                                <td className="py-1 text-right">{Number(ItemRate).toFixed(2)}</td>
                                 <td className={`py-1 text-right font-black ${variant === 'purchase' ? 'text-[12px]' : ''}`}>
-                                    {variant === 'purchase' ? '₹' : ''}{Number(ItemTotal).toFixed(0)}
+                                    {variant === 'purchase' ? '₹' : ''}{Number(ItemTotal).toFixed(2)}
                                 </td>
                             </tr>
                         )

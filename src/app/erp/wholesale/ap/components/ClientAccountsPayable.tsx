@@ -430,7 +430,7 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
                                     netPayable={parseFloat(printData.bill.total_amount)}
                                     amountPaid={parseFloat(printData.bill.amount_paid)}
                                     newDueAdded={parseFloat(printData.bill.total_amount) - parseFloat(printData.bill.amount_paid)}
-                                    oldDue={printData.supplierOldDue} // Not strictly accurate to point-in-time, but sufficient for reprint
+                                    oldDue={printData.supplierOldDue - (parseFloat(printData.bill.total_amount) - parseFloat(printData.bill.amount_paid))}
                                     timestamp={printData.bill.created_at}
                                 />
                             </div>
@@ -463,7 +463,7 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
                             netPayable={parseFloat(printData.bill.total_amount)}
                             amountPaid={parseFloat(printData.bill.amount_paid)}
                             newDueAdded={parseFloat(printData.bill.total_amount) - parseFloat(printData.bill.amount_paid)}
-                            oldDue={printData.supplierOldDue} // Not strictly accurate to point-in-time, but sufficient for reprint
+                            oldDue={printData.supplierOldDue - (parseFloat(printData.bill.total_amount) - parseFloat(printData.bill.amount_paid))}
                             timestamp={printData.bill.created_at}
                         />
                     </div>
