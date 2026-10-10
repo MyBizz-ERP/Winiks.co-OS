@@ -20,7 +20,6 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     const [amountReceived, setAmountReceived] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [completedBill, setCompletedBill] = useState<any>(null)
-    const [showHUD, setShowHUD] = useState(true)
     const [previewBillNo, setPreviewBillNo] = useState('')
     const [modalAction, setModalAction] = useState<'print' | 'new'>('print')
 
@@ -643,23 +642,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                     </div>
                 </div>
             )}
-            {/* Keyboard Shortcuts HUD */}
-            <AnimatePresence>
-                {showHUD && (
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="fixed bottom-6 right-6 hidden xl:block z-[9999] pointer-events-auto print:hidden">
-                        <div className="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-2xl relative">
-                            {/* Removed dismissal cross by user request */}
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 text-center border-b border-slate-800 pb-2">Keyboard Navigation</p>
-                            <div className="space-y-2 text-[11px] font-mono text-slate-300">
-                                <div className="flex justify-between items-center gap-6"><span>Product Add</span><span className="bg-slate-800 text-indigo-400 px-2 py-0.5 rounded font-bold">ENTER</span></div>
-                                <div className="flex justify-between items-center gap-6"><span>Grid Nav / Mod</span><span className="bg-slate-800 text-emerald-400 px-2 py-0.5 rounded font-bold">TAB</span></div>
-                                <div className="flex justify-between items-center gap-6"><span>Direct Print</span><span className="bg-slate-800 text-amber-400 px-2 py-0.5 rounded font-bold">CTRL + P</span></div>
-                                <div className="flex justify-between items-center gap-6"><span>Customer Skip</span><span className="bg-slate-800 text-rose-400 px-2 py-0.5 rounded font-bold">CTRL + ENTER</span></div>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            )}
         </div>
     )
 }
