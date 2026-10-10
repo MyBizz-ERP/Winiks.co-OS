@@ -320,7 +320,7 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
                             <TableHead className="font-semibold text-slate-500 h-12 text-[13px] tracking-tight">Product Key</TableHead>
                             <TableHead className="font-semibold text-slate-500 h-12 text-[13px] tracking-tight text-right w-32">Stock Vol.</TableHead>
                             <TableHead className="font-semibold text-slate-500 h-12 text-[13px] tracking-tight text-right w-32">Retail Avg.</TableHead>
-                            <TableHead className="font-semibold text-slate-500 h-12 text-[13px] tracking-tight text-right w-32">Net B2B</TableHead>
+                            <TableHead className="font-semibold text-slate-500 h-12 text-[13px] tracking-tight text-right w-32">Buy Rate</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -343,7 +343,7 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
                                         </span>
                                     </TableCell>
                                     <TableCell className="text-right text-slate-500 text-[14px] font-medium tracking-tight">₹{parseFloat(item.sell_rate).toFixed(2)}</TableCell>
-                                    <TableCell className="text-right text-[14px] font-bold tracking-tight text-indigo-600">₹{parseFloat(item.wholesale_rate).toFixed(2)}</TableCell>
+                                    <TableCell className="text-right text-[14px] font-bold tracking-tight text-indigo-600">₹{parseFloat(item.buy_rate).toFixed(2)}</TableCell>
                                 </TableRow>
                             ))
                         )}

@@ -131,7 +131,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
         setCart(prev => {
             const exists = prev.find(i => i.id === product.id)
             if (exists) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i)
-            return [...prev, { ...product, qty: 1, rate: parseFloat(product.sell_rate) }]
+            return [...prev, { ...product, qty: 1, rate: parseFloat(product.wholesale_rate || product.sell_rate) }]
         })
         setSearch('')
         setSelectedProdIdx(0)

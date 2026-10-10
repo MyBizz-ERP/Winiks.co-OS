@@ -58,11 +58,10 @@ export async function POST(req: Request) {
                 // could add bill_ref if added to schema, otherwise ignore for now
             }).returning({ id: purchaseBills.id, purchase_no: purchaseBills.purchase_no })
 
-            // 3. Process Items & Update Inventory
-            for (const item of cart) {
+            // 3. Process Items & Update Inventory (Concurrent Array Mapping)
+            const mapPromises = cart.map(async (item: any) => {
                 let targetProductId = item.productId
 
-                // If product is new, create it
                 if (item.isNew || !targetProductId) {
                     const [newProd] = await tx.insert(products).values({
                         shop_id: shopId,
@@ -70,35 +69,33 @@ export async function POST(req: Request) {
                         name_mr: item.name_mr,
                         buy_rate: item.buy_rate.toString(),
                         sell_rate: item.sell_rate.toString(),
-                        wholesale_rate: item.sell_rate.toString(), // Default equal to sell for now
+                        wholesale_rate: item.sell_rate.toString(),
                         stock: item.qty
                     }).returning({ id: products.id })
-
                     targetProductId = newProd.id
                 } else {
-                    // Existing product: fetch existing stock
-                    const existingProduct = await tx.query.products.findFirst({
-                        where: (p, { eq }) => eq(p.id, targetProductId)
-                    })
-
-                    if (existingProduct) {
-                        await tx.update(products).set({
-                            stock: existingProduct.stock + item.qty,
-                            buy_rate: item.buy_rate.toString(),
-                            sell_rate: item.sell_rate.toString()
-                        }).where(eq(products.id, targetProductId))
-                    }
+                    await tx.update(products).set({
+                        stock: sql`${products.stock} + ${item.qty}`,
+                        buy_rate: item.buy_rate.toString(),
+                        sell_rate: item.sell_rate.toString()
+                    }).where(eq(products.id, targetProductId))
                 }
 
-                // Insert purchase item line
-                await tx.insert(purchaseItems).values({
+                return {
                     purchase_bill_id: newBill.id,
                     product_id: targetProductId,
                     quantity: item.qty,
                     buy_rate: item.buy_rate.toString(),
                     sell_rate: item.sell_rate.toString(),
                     total_amount: item.total.toString(),
-                })
+                }
+            })
+
+            const purchaseItemsArray = await Promise.all(mapPromises)
+
+            // Execute isolated bulk insert bridging 1 query instead of N
+            if (purchaseItemsArray.length > 0) {
+                await tx.insert(purchaseItems).values(purchaseItemsArray)
             }
 
             // 4. Update Supplier Balance (Added/Subtracted Debt)

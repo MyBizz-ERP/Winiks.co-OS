@@ -48,19 +48,24 @@ export async function POST(req: NextRequest) {
             payment_method: paymentMethod || 'CASH',
         }).returning({ id: invoices.id, invoice_no: invoices.invoice_no })
 
-        // Create invoice items + deduct stock
-        for (const item of cart) {
-            await db.insert(invoiceItems).values({
-                invoice_id: invoice.id,
-                product_id: item.id,
-                quantity: item.qty,
-                rate: item.rate.toString(),
-                total: (item.qty * item.rate).toString(),
-            })
+        // 1. Bulk Insert Invoice Items Array
+        const itemsToInsert = cart.map((item: any) => ({
+            invoice_id: invoice.id,
+            product_id: item.id,
+            quantity: item.qty,
+            rate: item.rate.toString(),
+            total: (item.qty * item.rate).toString()
+        }))
 
-            // Deduct stock
-            const [prod] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, item.id))
-            await db.update(products).set({ stock: (prod?.stock || 0) - item.qty }).where(eq(products.id, item.id))
+        if (itemsToInsert.length > 0) {
+            await db.insert(invoiceItems).values(itemsToInsert)
+
+            // 2. Atomic Stock Decrement (Concurrent Promise Arrays)
+            await Promise.all(cart.map((item: any) =>
+                db.update(products)
+                    .set({ stock: sql`${products.stock} - ${item.qty}` })
+                    .where(eq(products.id, item.id))
+            ))
         }
 
         // Update customer Udhaari if linked
