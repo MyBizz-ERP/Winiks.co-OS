@@ -111,6 +111,17 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE'>('CASH')
     const [showPreview, setShowPreview] = useState(false)
     const [isWholesaleMode, setIsWholesaleMode] = useState(false) // Default Retail
+
+    // Reactive Cart Pricing Toggle
+    useEffect(() => {
+        if (cart.length > 0) {
+            setCart(prev => prev.map(item => ({
+                ...item,
+                rate: parseFloat(String(isWholesaleMode ? (item.wholesale_rate || item.sell_rate) : item.sell_rate))
+            })))
+        }
+    }, [isWholesaleMode])
+
     const searchRef = useRef<HTMLInputElement>(null)
     const customerSearchRef = useRef<HTMLInputElement>(null)
     const discountRef = useRef<HTMLInputElement>(null)
