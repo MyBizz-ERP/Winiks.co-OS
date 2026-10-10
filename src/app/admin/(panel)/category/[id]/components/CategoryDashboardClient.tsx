@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Server, Activity, Power, PowerOff, Building2, Phone, AlertCircle, HardDrive, Package, Users, Receipt, ArrowLeft, ArrowUpRight, Copy, Plus, X, Key, Trash2 } from 'lucide-react'
+import { Server, Activity, Power, PowerOff, Building2, Phone, AlertCircle, HardDrive, Package, Users, Receipt, ArrowLeft, ArrowUpRight, Copy, Plus, X, Key, Trash2, Edit2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { performAdminAction } from '../../../../actions'
 import { useState } from 'react'
@@ -36,6 +36,10 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
     const [shopToReset, setShopToReset] = useState<{ id: string, name: string, code: string } | null>(null)
     const [resetInput, setResetInput] = useState('')
     const [isResetting, setIsResetting] = useState(false)
+
+    // Edit Modal State
+    const [shopToEdit, setShopToEdit] = useState<any | null>(null)
+    const [isEditing, setIsEditing] = useState(false)
 
     // Format proper readable title
     const categoryTitle = categoryId === 'wholesale' ? 'Wholesale B2B' :
@@ -107,6 +111,20 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
             alert(error.message)
         } finally {
             setIsDeleting(false)
+        }
+    }
+
+    async function handleEditSubmit(formData: FormData) {
+        setIsEditing(true)
+        try {
+            const res = await performAdminAction(formData)
+            if (res && res.success) {
+                setShopToEdit(null)
+            }
+        } catch (error: any) {
+            alert(error.message)
+        } finally {
+            setIsEditing(false)
         }
     }
 
@@ -279,6 +297,16 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
                                                 >
                                                     <Key className="w-4 h-4" />
                                                 </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setShopToEdit(shop)
+                                                    }}
+                                                    className="px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-2 shadow-sm active:scale-95 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"
+                                                    title="Edit Node Profile"
+                                                >
+                                                    <Edit2 className="w-4 h-4" /> Edit
+                                                </button>
+
                                                 <button
                                                     onClick={() => {
                                                         setShopToReset({ id: shop.id, name: shop.name, code: shop.tenant_code || shop.id.split('-')[0] })
@@ -577,6 +605,83 @@ export default function CategoryDashboardClient({ metricsData, categoryId }: { m
                                     <Key className="w-4 h-4" />
                                     {isResetting ? 'ROTATING...' : 'AUTHORIZE KEY OVERWRITE'}
                                 </button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Edit Tenant Modal */}
+            <AnimatePresence>
+                {shopToEdit && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                            onClick={() => !isEditing && setShopToEdit(null)}
+                        />
+
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            className="bg-white border border-slate-200 rounded-3xl w-full max-w-xl overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] relative z-10 flex flex-col max-h-[90vh]"
+                        >
+                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                                <h2 className="text-[16px] font-bold text-slate-900 flex items-center gap-2">
+                                    <Edit2 className="w-4 h-4 text-indigo-600" /> Modify Tenant Node
+                                </h2>
+                                <button disabled={isEditing} onClick={() => setShopToEdit(null)} className="text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <form action={handleEditSubmit} className="flex flex-col overflow-hidden">
+                                <div className="p-5 overflow-y-auto w-full space-y-6">
+                                    <input type="hidden" name="actionType" value="edit_tenant" />
+                                    <input type="hidden" name="shopId" value={shopToEdit.id} />
+
+                                    <div>
+                                        <p className="text-[12px] font-bold text-indigo-600 uppercase tracking-widest mb-3">Organization Matrix</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="col-span-2 space-y-1.5">
+                                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Business Alias</label>
+                                                <input required name="shopName" type="text" defaultValue={shopToEdit.name} className="w-full px-4 h-10 bg-white border shadow-sm rounded-lg text-[13px]" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Marathi Alias</label>
+                                                <input name="shopNameMr" type="text" defaultValue={shopToEdit.name_mr || ''} className="w-full px-4 h-10 bg-white border shadow-sm rounded-lg text-[13px]" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Contact Node</label>
+                                                <input name="phone" type="text" defaultValue={shopToEdit.phone || ''} className="w-full px-4 h-10 bg-white border shadow-sm rounded-lg text-[13px]" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Sub-Section: Financial Monetization Layer */}
+                                    <div>
+                                        <p className="text-[12px] font-bold text-indigo-600 uppercase tracking-widest mb-3">Monetization Frame</p>
+                                        <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-[13px] font-bold text-rose-800">Assigned Contract Value (Monthly)</p>
+                                                <p className="text-[11px] text-rose-600/80 font-medium mt-0.5">Overrides standard rate logic.</p>
+                                            </div>
+                                            <div className="relative w-32">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] font-bold text-rose-700/50 flex">₹</span>
+                                                <input name="subscriptionPrice" type="number" defaultValue={shopToEdit.subscription_price || defaultSub} required className="w-full pl-7 pr-4 h-10 bg-white border border-rose-200 shadow-sm rounded-lg text-rose-900 font-black text-[15px] focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 outline-none transition-all text-right" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
+                                    <button type="submit" disabled={isEditing} className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] rounded-xl shadow-sm flex items-center justify-center transition-all active:scale-95 disabled:opacity-70 disabled:hover:scale-100">
+                                        {isEditing ? <Activity className="w-5 h-5 animate-spin" /> : 'Execute Modifications'}
+                                    </button>
+                                </div>
                             </form>
                         </motion.div>
                     </div>

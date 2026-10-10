@@ -109,6 +109,33 @@ export async function performAdminAction(formData: FormData) {
         }
     }
 
+    if (actionType === 'edit_tenant') {
+        const shopId = formData.get('shopId')?.toString()
+        if (!shopId) throw new Error("Missing Shop Payload")
+
+        const shopName = formData.get('shopName')?.toString()
+        const shopNameMr = formData.get('shopNameMr')?.toString()
+        const phone = formData.get('phone')?.toString()
+        const subscriptionPrice = formData.get('subscriptionPrice')?.toString()
+
+        if (!shopName) throw new Error("Shop Title is absolutely required.")
+
+        try {
+            await db.update(shops).set({
+                name: shopName,
+                name_mr: shopNameMr || null,
+                phone: phone || null,
+                subscription_price: subscriptionPrice ? parseFloat(subscriptionPrice) : 3000
+            }).where(eq(shops.id, shopId))
+
+            revalidatePath('/admin', 'layout')
+            return { success: true }
+        } catch (error: any) {
+            console.error("ADMIN EDIT ERROR:", error)
+            throw new Error(`Execution failed: ${error.message || 'Unknown error'}`)
+        }
+    }
+
     if (actionType === 'reset_tenant_credentials') {
         const shopId = formData.get('shopId')?.toString()
         if (!shopId) throw new Error("Missing Shop Payload")
