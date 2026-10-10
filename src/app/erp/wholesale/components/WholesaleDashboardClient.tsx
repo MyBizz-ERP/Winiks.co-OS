@@ -42,7 +42,7 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
     const chartData = useMemo(() => {
         if (!payload.invoices || payload.invoices.length === 0) return []
 
-        const dataPoints: Record<string, number> = {}
+        const dataPoints: Record<string, { Revenue: number, Udhaari: number }> = {}
         const now = new Date()
 
         let daysToShow = 7
@@ -53,7 +53,7 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
         // Initialize empty days backward
         for (let i = daysToShow - 1; i >= 0; i--) {
             const dateStr = format(subDays(now, i), 'dd MMM')
-            dataPoints[dateStr] = 0
+            dataPoints[dateStr] = { Revenue: 0, Udhaari: 0 }
         }
 
         // Aggregate real data
@@ -65,19 +65,26 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
                 const dateKey = timeFilter === 'today' ? format(invDate, 'ha') : format(invDate, 'dd MMM')
 
                 if (dataPoints[dateKey] !== undefined || timeFilter === 'today') {
+                    if (!dataPoints[dateKey]) dataPoints[dateKey] = { Revenue: 0, Udhaari: 0 }
                     // Net Sales Calculation
                     const netSale = Number(inv.total_amount)
-                    dataPoints[dateKey] = (dataPoints[dateKey] || 0) + netSale
+                    const paid = Number(inv.amount_paid)
+                    dataPoints[dateKey].Revenue += netSale
+                    dataPoints[dateKey].Udhaari += (netSale > paid ? netSale - paid : 0)
                 }
             }
         })
 
-        return Object.entries(dataPoints).map(([name, Total]) => ({ name, Total }))
+        return Object.entries(dataPoints).map(([name, data]) => ({ name, ...data }))
     }, [payload.invoices, timeFilter])
 
     // Derive Totals
     const currentTotal = useMemo(() => {
-        return chartData.reduce((acc, curr) => acc + curr.Total, 0)
+        return chartData.reduce((acc, curr) => acc + curr.Revenue, 0)
+    }, [chartData])
+
+    const udhaariTotal = useMemo(() => {
+        return chartData.reduce((acc, curr) => acc + curr.Udhaari, 0)
     }, [chartData])
 
     const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val)
@@ -180,29 +187,41 @@ export default function WholesaleDashboardClient({ payload }: { payload: Dashboa
                         </div>
                     </div>
 
-                    <div className="mb-6 flex items-baseline gap-3">
-                        <p className="text-4xl font-black text-slate-900 tracking-tight">{formatCurrency(currentTotal)}</p>
-                        <span className="text-xs font-bold uppercase tracking-widest text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">Collected</span>
+                    <div className="mb-6 flex items-end gap-6">
+                        <div className="flex items-baseline gap-3">
+                            <p className="text-4xl font-black text-slate-900 tracking-tight">{formatCurrency(currentTotal)}</p>
+                            <span className="text-xs font-bold uppercase tracking-widest text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">Gross Revenue</span>
+                        </div>
+                        <div className="flex items-baseline gap-3">
+                            <p className="text-2xl font-black text-slate-600 tracking-tight">{formatCurrency(udhaariTotal)}</p>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100 flex items-center gap-1">Unrecovered</span>
+                        </div>
                     </div>
 
-                    <div className="h-[250px] w-full">
+                    <div className="h-[280px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                                 <defs>
-                                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2} />
                                         <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorUdhaari" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2} />
+                                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickFormatter={(value: number) => `₹${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`} dx={-10} />
+                                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickFormatter={(value: number) => `₹${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`} dx={-10} />
+                                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#f43f5e', fontWeight: 600 }} tickFormatter={(value: number) => `${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`} dx={5} />
                                 <Tooltip
                                     cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
                                     contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px -3px rgba(0,0,0,0.1)', fontWeight: 600, fontSize: '13px' }}
-                                    formatter={(value: any) => [formatCurrency(value as number), 'Gross Sales']}
+                                    formatter={(value: any, name: any) => [formatCurrency(value as number), name]}
                                 />
-                                <Area type="monotone" dataKey="Total" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                                <Area yAxisId="left" type="monotone" dataKey="Revenue" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue" />
+                                <Area yAxisId="right" type="monotone" dataKey="Udhaari" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorUdhaari)" name="Debt Generation" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>

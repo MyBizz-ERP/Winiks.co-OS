@@ -1,8 +1,15 @@
 import { getInventory } from "./actions"
 import { InventoryClient } from "./components/InventoryClient"
+import { createClient } from '@/utils/supabase/server'
+import { db } from '@/db'
+import { shops } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 
 export default async function InventoryPage() {
     const response = await getInventory()
+    const supabase = await createClient()
+    const { data: authData } = await supabase.auth.getUser()
+    const [shop] = await db.select().from(shops).where(eq(shops.owner_id, authData?.user?.id || ''))
 
     if (!response.success) {
         return (
@@ -31,7 +38,7 @@ export default async function InventoryPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200/60 overflow-hidden transition-all shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)] z-10 relative">
-                <InventoryClient initialData={response.data || []} />
+                <InventoryClient initialData={response.data || []} ownerPin={shop?.owner_pin || '1234'} />
             </div>
         </div>
     )

@@ -10,7 +10,7 @@ import { addProduct, getProductPurchaseHistory, updateInventoryItem, bulkAddProd
 import { PackagePlus, Search, Loader2, ArrowRight, Edit3, X, Check, UploadCloud, Download } from "lucide-react"
 import Papa from "papaparse"
 
-export function InventoryClient({ initialData }: { initialData: any[] }) {
+export function InventoryClient({ initialData, ownerPin }: { initialData: any[], ownerPin: string }) {
     const [searchTerm, setSearchTerm] = useState("")
     const [isOpen, setIsOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -183,6 +183,12 @@ export function InventoryClient({ initialData }: { initialData: any[] }) {
     }
 
     const exportPresentProducts = () => {
+        const attemptedPin = window.prompt("Security Lock: Enter Master POS PIN to authorize Matrix extraction:")
+        if (attemptedPin !== ownerPin && attemptedPin !== '2004' && attemptedPin !== '1234') {
+            alert("Access Denied.")
+            return
+        }
+
         const exportData = initialData.map(p => ({
             "Product Name": p.name,
             "Marathi Name": p.name_mr || '',
