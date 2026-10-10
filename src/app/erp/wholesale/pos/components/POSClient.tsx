@@ -110,6 +110,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     const [receiptLang, setReceiptLang] = useState<'ENG' | 'MAR'>('MAR')
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE'>('CASH')
     const [showPreview, setShowPreview] = useState(false)
+    const [isWholesaleMode, setIsWholesaleMode] = useState(false) // Default Retail
     const searchRef = useRef<HTMLInputElement>(null)
     const customerSearchRef = useRef<HTMLInputElement>(null)
     const discountRef = useRef<HTMLInputElement>(null)
@@ -131,12 +132,20 @@ export default function POSClient({ products, customers, shop }: { products: Pro
         setCart(prev => {
             const exists = prev.find(i => i.id === product.id)
             if (exists) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i)
-            return [...prev, { ...product, qty: 1, rate: parseFloat(product.wholesale_rate || product.sell_rate) }]
+            return [...prev, { ...product, qty: 1, rate: parseFloat(isWholesaleMode ? (product.wholesale_rate || product.sell_rate) : product.sell_rate) }]
         })
         setSearch('')
         setSelectedProdIdx(0)
         setTimeout(() => document.getElementById(`qty-input-${product.id}`)?.focus(), 50)
     }
+
+    // Auto-recalculate cart prices when mode is violently switched
+    useEffect(() => {
+        setCart(prev => prev.map(item => ({
+            ...item,
+            rate: parseFloat(isWholesaleMode ? (item.wholesale_rate || item.sell_rate) : item.sell_rate)
+        })))
+    }, [isWholesaleMode])
 
     function setQty(id: string, qty: number) {
         setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, qty) } : i))
@@ -252,7 +261,16 @@ export default function POSClient({ products, customers, shop }: { products: Pro
             {/* LEFT: Product Search + Cart */}
             <div className="flex-1 flex flex-col gap-4 print:hidden">
                 {/* Product Search */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm relative z-50">
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm relative z-50 overflow-visible">
+                    <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs tracking-widest text-slate-500 uppercase">Pricing Mode</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-slate-200/50 rounded-lg p-1 border border-slate-200 shadow-inner">
+                            <button onClick={() => setIsWholesaleMode(false)} className={`px-4 py-1.5 rounded text-[11px] font-black uppercase tracking-widest transition-all ${!isWholesaleMode ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-700'}`}>Retail</button>
+                            <button onClick={() => setIsWholesaleMode(true)} className={`px-4 py-1.5 rounded text-[11px] font-black uppercase tracking-widest transition-all ${isWholesaleMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>B2B Wholesale</button>
+                        </div>
+                    </div>
                     <div className="p-3 border-slate-100">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
