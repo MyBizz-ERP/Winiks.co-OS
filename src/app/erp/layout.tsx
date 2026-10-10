@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import SaaSPaywall from "./components/SaaSPaywall"
 import MobileFloatingDock from '@/components/mobile-dock'
+import LiveSyncProvider from '@/components/LiveSyncProvider'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export default async function ERPRootLayout({ children }: { children: React.Reac
 
     return (
         <TooltipProvider>
+            <LiveSyncProvider shopId={shop.id} />
             <SidebarProvider defaultOpen={true}>
                 {!isExpired && <AppSidebar />}
 
