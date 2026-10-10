@@ -642,7 +642,6 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                     </div>
                 </div>
             )}
-            )}
         </div>
     )
 }
