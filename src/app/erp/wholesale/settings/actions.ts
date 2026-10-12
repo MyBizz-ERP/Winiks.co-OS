@@ -7,7 +7,7 @@ import { createClient } from "@/utils/supabase/server"
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 
-export async function updateReceiptSettings(data: { name_mr: string, address: string, address_mr: string }) {
+export async function updateReceiptSettings(data: { name_mr: string, address: string, address_mr: string, phone?: string }) {
     const supabase = await createClient()
     const { data: authData } = await supabase.auth.getUser()
     if (!authData?.user) throw new Error("Unauthorized")
@@ -17,9 +17,13 @@ export async function updateReceiptSettings(data: { name_mr: string, address: st
             name_mr: data.name_mr,
             address: data.address,
             address_mr: data.address_mr,
+            phone: data.phone !== undefined ? data.phone : undefined
         })
         .where(eq(shops.owner_id, authData.user.id))
 
+    revalidatePath('/erp/wholesale/settings')
+    revalidatePath('/erp/wholesale/udhaari')
+    revalidatePath('/erp/wholesale/pos')
     return { success: true }
 }
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { triggerLiveSync } from '@/utils/realtimeSync'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     HandCoins,
@@ -20,7 +21,17 @@ import {
 } from 'lucide-react'
 import { addManualUdhaariDebt, createManualCustomer } from '../actions'
 
-export default function UdhaariClient({ customers: initialCustomers, shopId }: { customers: any[], shopId: string }) {
+export default function UdhaariClient({
+    customers: initialCustomers,
+    shopId,
+    shopName,
+    shopPhone
+}: {
+    customers: any[],
+    shopId: string,
+    shopName?: string,
+    shopPhone?: string
+}) {
     const router = useRouter()
     const [customerList, setCustomerList] = useState<any[]>(initialCustomers || [])
     const [search, setSearch] = useState('')
@@ -74,6 +85,7 @@ export default function UdhaariClient({ customers: initialCustomers, shopId }: {
 
             setPayingId(null)
             setPayAmount('')
+            triggerLiveSync(shopId)
             router.refresh()
         } catch (e: any) {
             alert(e.message)
@@ -100,6 +112,7 @@ export default function UdhaariClient({ customers: initialCustomers, shopId }: {
 
                 setAddingId(null)
                 setAddAmount('')
+                triggerLiveSync(shopId)
                 router.refresh()
             }
         } catch (e: any) {
@@ -128,10 +141,13 @@ export default function UdhaariClient({ customers: initialCustomers, shopId }: {
     }
 
     const sendWhatsAppReminder = (name: string, phone: string, amount: number) => {
-        if (!phone) return alert('No phone number recorded for this client')
+        if (!phone) return alert('No phone number recorded for this client. Please update the client profile with a valid mobile number.')
         const cleanPhone = phone.replace(/[^0-9]/g, '')
+        if (cleanPhone.length < 10) return alert('Please enter a valid 10-digit mobile number for this client.')
         const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone
-        const message = `Namaskar ${name}, This is a friendly reminder from our store: Your pending Udhaari balance is Rs. ${amount.toFixed(2)}. Kindly arrange for the payment at your convenience. Thank you!`
+        const fromStore = shopName ? `*${shopName}*` : 'our store'
+        const storeContact = shopPhone ? ` (Contact/WhatsApp: ${shopPhone})` : ''
+        const message = `Namaskar ${name},\n\nThis is a friendly reminder from ${fromStore}${storeContact}:\nYour pending Udhaari balance is *Rs. ${amount.toFixed(2)}*.\n\nKindly arrange for the payment at your earliest convenience.\nThank you for your business!`
         window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank')
     }
 

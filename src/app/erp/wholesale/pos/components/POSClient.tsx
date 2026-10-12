@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Plus, Minus, Trash2, ShoppingCart, User, IndianRupee, Printer, CheckCircle2, X, Eye, Users, ChevronDown, UserPlus } from 'lucide-react'
 import SharedThermalReceipt from '../../components/SharedThermalReceipt'
 import { quickCreateCustomer } from '../actions'
+import { triggerLiveSync } from '@/utils/realtimeSync'
 
 interface Product { id: string; name: string; name_mr: string | null; stock: number; sell_rate: string; wholesale_rate: string; min_wholesale_qty?: number | null; buy_rate: string | null }
 interface Customer { id: string; name: string; phone: string | null; customer_type?: string; old_balance: string }
@@ -282,29 +283,60 @@ export default function POSClient({ products, customers, shop }: { products: Pro
             const pending = JSON.parse(localStorage.getItem('mybizz_offline_sales') || '[]')
             pending.push(payload)
             localStorage.setItem('mybizz_offline_sales', JSON.stringify(pending))
-            setCompletedBill({ ...payload, id: `OFFL-${Date.now()}`, customer: selectedCustomer, netTotal, paid, newUdhaari: prevUdhaari + (netTotal - paid > 0 ? netTotal - paid : 0) })
+            setCompletedBill({ ...payload, id: `OFFL-${Date.now().toString().slice(-4)}`, customer: selectedCustomer, cart, subtotal, netTotal, paid, newUdhaari: prevUdhaari + (netTotal - paid > 0 ? netTotal - paid : 0), paymentMethod })
             setCart([]); setSelectedCustomer(null); setDiscount(0); setAmountReceived('')
+            setModalAction('print')
             return
         }
 
-        setIsSubmitting(true)
-        try {
-            const res = await fetch('/api/erp/pos/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+        // 0.0s ZERO-LATENCY INSTANT CHECKOUT (Zero waiting time for cashier)
+        const currentCart = [...cart]
+        const currentCust = selectedCustomer
+        const currentSubtotal = subtotal
+        const currentDiscount = discount
+        const currentNetTotal = netTotal
+        const currentPaid = paid
+        const currentNewUdhaari = newUdhaari
+        const currentPaymentMethod = paymentMethod
+        const tempId = `INV-T${Date.now().toString().slice(-4)}`
+
+        setCompletedBill({
+            id: tempId,
+            customer: currentCust,
+            cart: currentCart,
+            subtotal: currentSubtotal,
+            discount: currentDiscount,
+            netTotal: currentNetTotal,
+            paid: currentPaid,
+            newUdhaari: currentNewUdhaari,
+            paymentMethod: currentPaymentMethod
+        })
+        setCart([])
+        setSelectedCustomer(null)
+        setDiscount(0)
+        setAmountReceived('')
+        setModalAction('print')
+
+        // Asynchronously persist to database in background (<300ms batched query)
+        fetch('/api/erp/pos/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(async (res) => {
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.error || 'Server error')
+                if (data.invoiceId) {
+                    setCompletedBill((prev: any) => prev ? { ...prev, ...data, id: data.invoiceId } : prev)
+                }
+                triggerLiveSync(shop?.id)
             })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Unknown error')
-            const resData = data // store if needed
-            setCompletedBill({ ...data, customer: selectedCustomer, cart, netTotal, paid, newUdhaari, paymentMethod })
-            setCart([]); setSelectedCustomer(null); setDiscount(0); setAmountReceived('')
-            setModalAction('print') // Default to print
-        } catch (e: any) {
-            alert(e.message)
-        } finally {
-            setIsSubmitting(false)
-        }
+            .catch((e: any) => {
+                console.error('POS Checkout Sync Warning:', e)
+                const pending = JSON.parse(localStorage.getItem('mybizz_offline_sales') || '[]')
+                pending.push(payload)
+                localStorage.setItem('mybizz_offline_sales', JSON.stringify(pending))
+            })
     }
 
     // Global Keyboard Hooks
@@ -354,7 +386,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     }[receiptLang]
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-full print:block print:h-auto">
+        <div className="flex flex-col lg:flex-row gap-6 h-full print:block print:h-auto pb-12 lg:pb-0">
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @media print {

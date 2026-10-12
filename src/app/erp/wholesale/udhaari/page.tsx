@@ -12,12 +12,12 @@ export default async function UdhaariPage() {
     const { data: authData } = await supabase.auth.getUser()
     if (!authData?.user) redirect('/login')
 
-    const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.owner_id, authData.user.id))
+    const [shop] = await db.select({ id: shops.id, name: shops.name, phone: shops.phone }).from(shops).where(eq(shops.owner_id, authData.user.id))
     if (!shop) redirect('/erp')
 
     const allCustomers = await db.select().from(customers)
         .where(eq(customers.shop_id, shop.id))
         .orderBy(desc(customers.old_balance))
 
-    return <UdhaariClient customers={allCustomers} shopId={shop.id} />
+    return <UdhaariClient customers={allCustomers} shopId={shop.id} shopName={shop.name} shopPhone={shop.phone || ''} />
 }

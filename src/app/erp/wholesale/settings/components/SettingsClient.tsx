@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Save, UploadCloud, Download, Lock, Key, UserCircle } from 'lucide-react'
+import { Save, UploadCloud, Download, Lock, Key, UserCircle, Phone } from 'lucide-react'
 import Papa from 'papaparse'
 import { updateReceiptSettings, processLegacyCsv, updateVaultPin, updateLoginPassword, updateLoginId } from '../actions'
 import OwnerSecurityGate from '@/components/OwnerSecurityGate'
@@ -12,6 +12,7 @@ export default function SettingsClient({ shop }: { shop: any }) {
     const [nameMr, setNameMr] = useState(shop.name_mr || '')
     const [address, setAddress] = useState(shop.address || '')
     const [addressMr, setAddressMr] = useState(shop.address_mr || '')
+    const [phone, setPhone] = useState(shop.phone || '')
 
     const [isSaving, setIsSaving] = useState(false)
     const [uploadStatus, setUploadStatus] = useState('')
@@ -25,8 +26,8 @@ export default function SettingsClient({ shop }: { shop: any }) {
     const handleSaveMetadata = async () => {
         setIsSaving(true)
         try {
-            await updateReceiptSettings({ name_mr: nameMr, address, address_mr: addressMr })
-            alert('Receipt parameters officially updated.')
+            await updateReceiptSettings({ name_mr: nameMr, address, address_mr: addressMr, phone })
+            alert('Store parameters & WhatsApp contact successfully saved!')
         } catch (e) {
             alert('Settings failed to sync.')
         } finally {
@@ -136,6 +137,18 @@ export default function SettingsClient({ shop }: { shop: any }) {
                                     className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-500 italic cursor-not-allowed"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-2">Cannot be modified. Central Admin lock enabled.</p>
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block flex items-center gap-1.5">
+                                    <Phone className="w-3.5 h-3.5 text-emerald-600" /> Store WhatsApp / Contact Number
+                                </label>
+                                <input
+                                    value={phone}
+                                    onChange={e => setPhone(e.target.value)}
+                                    className="w-full px-4 py-3 bg-white border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl text-sm font-bold text-slate-900 transition-all outline-none"
+                                    placeholder="e.g. 919876543210"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-2">Official shop owner contact used for Udhaari payment reminders.</p>
                             </div>
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block">Custom Invoice Name (MR)</label>

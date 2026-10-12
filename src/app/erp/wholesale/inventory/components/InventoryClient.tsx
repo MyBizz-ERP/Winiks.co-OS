@@ -14,6 +14,7 @@ import {
     quickUpdateProductField,
     bulkDeleteProducts
 } from "../actions"
+import { triggerLiveSync } from "@/utils/realtimeSync"
 import {
     PackagePlus,
     Search,
@@ -81,7 +82,7 @@ export function InventoryClient({ initialData, ownerPin }: { initialData: any[],
     // Inline cell edit handler with instant optimistic update & background persistence
     const handleInlineCellChange = async (
         productId: string,
-        field: 'sell_rate' | 'wholesale_rate' | 'min_wholesale_qty' | 'stock',
+        field: 'buy_rate' | 'sell_rate' | 'wholesale_rate' | 'min_wholesale_qty' | 'stock',
         newValue: string
     ) => {
         const product = products.find(p => p.id === productId)
@@ -105,6 +106,7 @@ export function InventoryClient({ initialData, ownerPin }: { initialData: any[],
             if (res.success) {
                 setSavedNotice(`${product.name}: ${field.replace('_', ' ')} updated`)
                 setTimeout(() => setSavedNotice(null), 2500)
+                triggerLiveSync(product.shop_id)
             } else {
                 alert(`Update failed: ${res.error}`)
                 // Revert
@@ -172,6 +174,7 @@ export function InventoryClient({ initialData, ownerPin }: { initialData: any[],
                 setSelectedIds([])
                 setSavedNotice(res.message || `Deleted ${res.deletedCount} products.`)
                 setTimeout(() => setSavedNotice(null), 3000)
+                triggerLiveSync(products[0]?.shop_id)
             } else {
                 alert("Bulk Delete Error: " + res.error)
             }
@@ -715,11 +718,26 @@ export function InventoryClient({ initialData, ownerPin }: { initialData: any[],
                                                 </div>
                                             </td>
 
-                                            {/* Buy Rate (Read-Only Pill) */}
+                                            {/* Buy Rate (Shopify Inline Editable Pill) */}
                                             <td className="p-3 text-right">
-                                                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                                                    ₹{parseFloat(item.buy_rate || '0').toFixed(2)}
-                                                </span>
+                                                <div className="relative inline-block">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        defaultValue={parseFloat(item.buy_rate || '0').toFixed(2)}
+                                                        onBlur={(e) => handleInlineCellChange(item.id, 'buy_rate', e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.currentTarget.blur()
+                                                            }
+                                                        }}
+                                                        className="w-20 text-right font-bold text-slate-700 bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-slate-500 focus:ring-1 focus:ring-slate-500 rounded-md px-2 py-1 text-xs transition-all shadow-sm"
+                                                        title="Click to edit Buy Rate directly"
+                                                    />
+                                                    {savingCellId === `${item.id}-buy_rate` && (
+                                                        <Loader2 className="w-3 h-3 animate-spin text-slate-500 absolute -top-1 -right-1" />
+                                                    )}
+                                                </div>
                                             </td>
 
                                             {/* Retail Rate (Shopify Inline Editable Pill) */}
@@ -968,7 +986,7 @@ export function InventoryClient({ initialData, ownerPin }: { initialData: any[],
                         initial={{ y: 50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 50, opacity: 0 }}
-                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-950 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3.5 border border-slate-800 backdrop-blur-xl"
+                        className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[95vw] overflow-x-auto bg-slate-950 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 sm:gap-3.5 border border-slate-800 backdrop-blur-xl"
                     >
                         <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />

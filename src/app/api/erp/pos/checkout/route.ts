@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { shops, products, customers, invoices, invoiceItems } from '@/db/schema'
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, and, sql, inArray } from 'drizzle-orm'
 import { createClient } from '@/utils/supabase/server'
 
 export async function POST(req: NextRequest) {
@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
 
         const { cart, customerId, customerName, customerType, customerPhone, discount, amountPaid, subtotal, netTotal, paymentMethod } = await req.json()
 
+        if (!cart || cart.length === 0) return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
+
         let finalCustomerId = customerId
         if (customerId === 'NEW' && customerName) {
             const [cust] = await db.insert(customers).values({
@@ -27,21 +29,30 @@ export async function POST(req: NextRequest) {
             finalCustomerId = cust.id
         }
 
-        if (!cart || cart.length === 0) return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
+        // 1. ULTRA-FAST SINGLE-QUERY COGS CALCULATION (O(1) round-trip instead of N queries)
+        const cartProductIds = cart.map((item: any) => item.id)
+        const productRows = await db.select({ id: products.id, buy_rate: products.buy_rate })
+            .from(products)
+            .where(and(inArray(products.id, cartProductIds), eq(products.shop_id, shop.id)))
 
-        // Calculate total COGS
+        const buyRateMap = new Map<string, number>()
+        productRows.forEach(p => {
+            buyRateMap.set(p.id, parseFloat(p.buy_rate || '0'))
+        })
+
         let totalCogs = 0
         for (const item of cart) {
-            const [product] = await db.select({ buy_rate: products.buy_rate }).from(products)
-                .where(and(eq(products.id, item.id), eq(products.shop_id, shop.id)))
-            totalCogs += (parseFloat(product?.buy_rate || '0') * item.qty)
+            const buyRate = buyRateMap.get(item.id) || 0
+            totalCogs += buyRate * item.qty
         }
 
-        // Generate sequential invoice no
-        const [seqResult] = await db.select({ maxSeq: sql<number>`COALESCE(MAX(invoice_no), 0)` }).from(invoices).where(eq(invoices.shop_id, shop.id))
+        // 2. Generate sequential invoice no
+        const [seqResult] = await db.select({ maxSeq: sql<number>`COALESCE(MAX(invoice_no), 0)` })
+            .from(invoices)
+            .where(eq(invoices.shop_id, shop.id))
         const nextSeq = (seqResult?.maxSeq || 0) + 1
 
-        // Create invoice
+        // 3. Create invoice
         const [invoice] = await db.insert(invoices).values({
             shop_id: shop.id,
             invoice_no: nextSeq,
@@ -54,7 +65,7 @@ export async function POST(req: NextRequest) {
             payment_method: paymentMethod || 'CASH',
         }).returning({ id: invoices.id, invoice_no: invoices.invoice_no })
 
-        // 1. Bulk Insert Invoice Items Array
+        // 4. Bulk Insert Invoice Items Array
         const itemsToInsert = cart.map((item: any) => ({
             invoice_id: invoice.id,
             product_id: item.id,
@@ -66,12 +77,20 @@ export async function POST(req: NextRequest) {
         if (itemsToInsert.length > 0) {
             await db.insert(invoiceItems).values(itemsToInsert)
 
-            // 2. Atomic Stock Decrement (Concurrent Promise Arrays)
-            await Promise.all(cart.map((item: any) =>
-                db.update(products)
-                    .set({ stock: sql`${products.stock} - ${item.qty}` })
-                    .where(eq(products.id, item.id))
-            ))
+            // 5. Atomic Stock Decrements in single batch SQL query
+            const caseStatements = cart.map((item: any) =>
+                sql`WHEN id = ${item.id}::uuid THEN stock - ${Number(item.qty)}`
+            )
+            const idList = cart.map((item: any) => sql`${item.id}::uuid`)
+
+            await db.execute(sql`
+                UPDATE wholesale.products
+                SET stock = CASE
+                    ${sql.join(caseStatements, sql` `)}
+                    ELSE stock
+                END
+                WHERE id IN (${sql.join(idList, sql`, `)}) AND shop_id = ${shop.id}::uuid
+            `)
         }
 
         // Update customer Udhaari if linked
