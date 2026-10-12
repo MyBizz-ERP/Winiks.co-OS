@@ -29,6 +29,7 @@ type CartItem = {
     name_mr: string;
     buy_rate: number;
     sell_rate: number;
+    wholesale_rate?: number;
     qty: number;
     total: number;
     isNew: boolean;
@@ -122,6 +123,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     const qtyRef = useRef<HTMLInputElement>(null)
     const buyRateRef = useRef<HTMLInputElement>(null)
     const sellRateRef = useRef<HTMLInputElement>(null)
+    const wholesaleRateRef = useRef<HTMLInputElement>(null)
 
     // Current Row State
     const [searchQuery, setSearchQuery] = useState('')
@@ -133,6 +135,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     const [formQty, setFormQty] = useState('')
     const [formBuy, setFormBuy] = useState('')
     const [formSell, setFormSell] = useState('')
+    const [formWholesale, setFormWholesale] = useState('')
 
     const [isTranslating, setIsTranslating] = useState(false)
 
@@ -182,6 +185,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                 setFormMrName(match.name_mr || '')
                 setFormBuy(match.buy_rate?.toString() || '0')
                 setFormSell(match.sell_rate?.toString() || '0')
+                setFormWholesale(match.wholesale_rate?.toString() || match.sell_rate?.toString() || '0')
                 setFormQty('1')
                 setTimeout(() => qtyRef.current?.focus(), 50)
             } else {
@@ -190,6 +194,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                 const mrTranslation = await translateToMarathi(query)
                 setFormMrName(mrTranslation)
                 setFormQty('1')
+                setFormWholesale('')
                 setTimeout(() => marathiRef.current?.focus(), 50)
             }
         }
@@ -211,6 +216,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
         const qty = parseFloat(formQty) || 0
         const buy = parseFloat(formBuy) || 0
         const sell = parseFloat(formSell) || 0
+        const wholesale = parseFloat(formWholesale) || sell
 
         if (qty <= 0) return alert("Quantity must be greater than 0")
         if (isNewProduct && (!searchQuery || !formMrName)) return alert("Name and Marathi Name are required for new products.")
@@ -222,6 +228,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
             name_mr: formMrName.trim(),
             buy_rate: buy,
             sell_rate: sell,
+            wholesale_rate: wholesale,
             qty: qty,
             total: qty * buy,
             isNew: isNewProduct
@@ -237,11 +244,12 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
         setFormMrName('')
         setFormBuy('')
         setFormSell('')
+        setFormWholesale('')
         setFormQty('')
         setTimeout(() => searchRef.current?.focus(), 50)
     }
 
-    const updateCartItem = (tempId: string, field: 'qty' | 'buy_rate' | 'sell_rate', value: number) => {
+    const updateCartItem = (tempId: string, field: 'qty' | 'buy_rate' | 'sell_rate' | 'wholesale_rate', value: number) => {
         setCart(cart.map(c => {
             if (c.tempId === tempId) {
                 const updated = { ...c, [field]: value }
@@ -477,16 +485,31 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
 
                             <div className="w-[120px]">
                                 <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1.5 block">Sell Rate</label>
+                                <input
+                                    tabIndex={5}
+                                    ref={sellRateRef}
+                                    type="number"
+                                    value={formSell}
+                                    onChange={(e) => setFormSell(e.target.value)}
+                                    onFocus={(e) => e.target.select()}
+                                    onKeyDown={(e) => handleKeyDown(e, wholesaleRateRef)}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono"
+                                />
+                            </div>
+
+                            <div className="w-[130px]">
+                                <label className="text-[10px] uppercase tracking-widest font-bold text-emerald-600 mb-1.5 block">Wholesale Rate</label>
                                 <div className="relative flex items-center">
                                     <input
-                                        tabIndex={5}
-                                        ref={sellRateRef}
+                                        tabIndex={6}
+                                        ref={wholesaleRateRef}
                                         type="number"
-                                        value={formSell}
-                                        onChange={(e) => setFormSell(e.target.value)}
+                                        placeholder={formSell || 'Rate'}
+                                        value={formWholesale}
+                                        onChange={(e) => setFormWholesale(e.target.value)}
                                         onFocus={(e) => e.target.select()}
                                         onKeyDown={(e) => handleKeyDown(e, null, true)}
-                                        className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono"
+                                        className="w-full pr-12 pl-4 py-3 bg-emerald-50/40 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 font-mono"
                                     />
                                     <span className="absolute right-3 text-[10px] font-bold text-slate-400">ENTER ⏎</span>
                                 </div>
@@ -512,6 +535,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                     <th className="px-6 py-4 font-bold text-center">Qty</th>
                                     <th className="px-6 py-4 font-bold text-right">Cost Rate</th>
                                     <th className="px-6 py-4 font-bold text-right">Sale Rate</th>
+                                    <th className="px-6 py-4 font-bold text-right">Wholesale</th>
                                     <th className="px-6 py-4 font-bold text-right">Value (Buy)</th>
                                     <th className="px-6 py-4"></th>
                                 </tr>
@@ -540,6 +564,9 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                         </td>
                                         <td className="px-4 py-3">
                                             <input type="number" value={item.sell_rate} onFocus={(e) => e.target.select()} onChange={e => updateCartItem(item.tempId, 'sell_rate', parseFloat(e.target.value) || 0)} className="w-20 border border-slate-200 rounded-lg text-[13px] font-mono font-bold text-right px-2 py-1 block focus:border-indigo-500 outline-none ml-auto text-indigo-700" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <input type="number" value={item.wholesale_rate ?? item.sell_rate} onFocus={(e) => e.target.select()} onChange={e => updateCartItem(item.tempId, 'wholesale_rate', parseFloat(e.target.value) || 0)} className="w-20 border border-slate-200 rounded-lg text-[13px] font-mono font-bold text-right px-2 py-1 block focus:border-emerald-500 outline-none ml-auto text-emerald-700" />
                                         </td>
                                         <td className="px-6 py-4 font-mono font-bold text-right text-slate-900">₹{item.total.toFixed(2)}</td>
                                         <td className="px-6 py-4 text-right">

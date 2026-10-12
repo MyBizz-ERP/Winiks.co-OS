@@ -13,11 +13,17 @@ export async function POST(req: NextRequest) {
         const [shop] = await db.select({ id: shops.id }).from(shops).where(eq(shops.owner_id, authData.user.id))
         if (!shop) return NextResponse.json({ error: 'No shop found' }, { status: 404 })
 
-        const { cart, customerId, customerName, discount, amountPaid, subtotal, netTotal, paymentMethod } = await req.json()
+        const { cart, customerId, customerName, customerType, customerPhone, discount, amountPaid, subtotal, netTotal, paymentMethod } = await req.json()
 
         let finalCustomerId = customerId
         if (customerId === 'NEW' && customerName) {
-            const [cust] = await db.insert(customers).values({ shop_id: shop.id, name: customerName, old_balance: '0' }).returning({ id: customers.id })
+            const [cust] = await db.insert(customers).values({
+                shop_id: shop.id,
+                name: customerName,
+                customer_type: customerType || 'RETAIL',
+                phone: customerPhone || null,
+                old_balance: '0'
+            }).returning({ id: customers.id })
             finalCustomerId = cust.id
         }
 

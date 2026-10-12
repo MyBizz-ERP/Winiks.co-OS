@@ -44,6 +44,7 @@ export async function createManualCustomer(formData: FormData) {
     const name = formData.get('name') as string
     const phone = formData.get('phone') as string
     const oldBalance = parseFloat(formData.get('oldBalance') as string) || 0
+    const customerType = (formData.get('customerType') as string) || 'RETAIL'
 
     if (!name) throw new Error("Customer Name is required")
 
@@ -58,6 +59,7 @@ export async function createManualCustomer(formData: FormData) {
         shop_id: shop.id,
         name,
         phone,
+        customer_type: customerType,
         old_balance: oldBalance.toString()
     })
 

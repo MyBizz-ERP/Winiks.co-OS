@@ -69,16 +69,20 @@ export async function POST(req: Request) {
                         name_mr: item.name_mr,
                         buy_rate: item.buy_rate.toString(),
                         sell_rate: item.sell_rate.toString(),
-                        wholesale_rate: item.sell_rate.toString(),
+                        wholesale_rate: (item.wholesale_rate || item.sell_rate).toString(),
+                        min_wholesale_qty: item.min_wholesale_qty ? parseInt(item.min_wholesale_qty) : 12,
                         stock: item.qty
                     }).returning({ id: products.id })
                     targetProductId = newProd.id
                 } else {
-                    await tx.update(products).set({
+                    const updatePayload: any = {
                         stock: sql`${products.stock} + ${item.qty}`,
                         buy_rate: item.buy_rate.toString(),
                         sell_rate: item.sell_rate.toString()
-                    }).where(eq(products.id, targetProductId))
+                    }
+                    if (item.wholesale_rate) updatePayload.wholesale_rate = item.wholesale_rate.toString()
+                    if (item.min_wholesale_qty) updatePayload.min_wholesale_qty = parseInt(item.min_wholesale_qty)
+                    await tx.update(products).set(updatePayload).where(eq(products.id, targetProductId))
                 }
 
                 return {

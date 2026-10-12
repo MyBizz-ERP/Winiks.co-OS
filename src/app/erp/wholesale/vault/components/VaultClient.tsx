@@ -213,11 +213,49 @@ export default function VaultClient({
                     <Receipt className="w-4 h-4 text-indigo-500" />
                     <h2 className="font-bold text-[14px] text-slate-900">Today's Invoice Log ({todayInvoices.length})</h2>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Mobile View: Today's Invoices */}
+                <div className="block md:hidden divide-y divide-slate-100 p-3">
+                    {todayInvoices.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs">No sales recorded today.</div>
+                    ) : (
+                        todayInvoices.map(inv => {
+                            const sale = parseFloat(inv.subtotal) || 0
+                            const cogs = parseFloat(inv.total_cogs) || 0
+                            const discount = parseFloat(inv.discount) || 0
+                            const profit = (sale - discount) - cogs
+                            const paid = parseFloat(inv.amount_paid) || 0
+
+                            return (
+                                <div key={inv.id} className="py-3 space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-mono font-bold text-slate-700">{inv.id.split('-')[0]}...</span>
+                                        <span className="text-slate-400 text-[11px]">{new Date(inv.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-500">Sale: <strong>₹{sale.toFixed(0)}</strong></span>
+                                        <span className="text-emerald-700 font-black">Profit: ₹{profit.toFixed(0)}</span>
+                                        <span className="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">Paid: ₹{paid.toFixed(0)}</span>
+                                        <button onClick={() => fetchInvoiceReceipt(inv.id)} disabled={isFetchingReceipt} className="p-1 text-indigo-600 bg-indigo-50 rounded">
+                                            <Eye className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+
+                {/* Desktop View: Today's Invoices Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-[#f8fafc] text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             <tr>
                                 <th className="px-5 py-3">Invoice ID</th>
+                                <th className="px-5 py-3 text-right">Subtotal</th>
+                                <th className="px-5 py-3 text-right">Discount</th>
+                                <th className="px-5 py-3 text-right">COGS</th>
+                                <th className="px-5 py-3 text-right text-emerald-700">Net Profit</th>
+                                <th className="px-5 py-3 text-right text-indigo-600">Cash Received</th>
                                 <th className="px-5 py-3 text-right text-slate-400">Time</th>
                                 <th className="px-5 py-3 text-right">Preview</th>
                             </tr>
@@ -257,7 +295,38 @@ export default function VaultClient({
                     <Truck className="w-4 h-4 text-rose-500" />
                     <h2 className="font-bold text-[14px] text-slate-900">Today's Purchase Log ({todayPurchases.length})</h2>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Mobile View: Today's Purchases */}
+                <div className="block md:hidden divide-y divide-slate-100 p-3">
+                    {todayPurchases.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs">No purchases recorded today.</div>
+                    ) : (
+                        todayPurchases.map(pur => {
+                            const total = parseFloat(pur.total_amount) || 0
+                            const paid = parseFloat(pur.amount_paid) || 0
+                            const debt = total > paid ? total - paid : 0
+
+                            return (
+                                <div key={pur.id} className="py-3 space-y-1.5 text-xs">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-mono font-bold text-slate-700">{pur.id.split('-')[0]}...</span>
+                                        <span className="text-slate-400 text-[11px]">{new Date(pur.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-500">Total: <strong>₹{total.toFixed(0)}</strong></span>
+                                        <span className="text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded">Paid: ₹{paid.toFixed(0)}</span>
+                                        {debt > 0 && <span className="text-amber-600 font-bold">Due: ₹{debt.toFixed(0)}</span>}
+                                        <button onClick={() => fetchPurchaseReceipt(pur.id)} disabled={isFetchingReceipt} className="p-1 text-rose-500 bg-rose-50 rounded">
+                                            <Eye className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+
+                {/* Desktop View: Today's Purchases Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-[#f8fafc] text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             <tr>

@@ -23,6 +23,7 @@ export async function createCustomer(formData: FormData) {
     const name = formData.get('name')?.toString()
     const phone = formData.get('phone')?.toString() || null
     const oldBalanceStr = formData.get('old_balance')?.toString() || "0"
+    const customerType = (formData.get('customer_type')?.toString() || "RETAIL").toUpperCase()
 
     if (!name) throw new Error("Customer name is mathematically required.")
 
@@ -31,6 +32,7 @@ export async function createCustomer(formData: FormData) {
             shop_id: shopId,
             name,
             phone,
+            customer_type: customerType,
             old_balance: oldBalanceStr
         })
     } catch (e: any) {
@@ -62,6 +64,7 @@ export async function updateCustomer(customerId: string, formData: FormData) {
     const name = formData.get('name')?.toString()
     const phone = formData.get('phone')?.toString() || null
     const oldBalanceStr = formData.get('old_balance')?.toString() || '0'
+    const customerType = (formData.get('customer_type')?.toString() || "RETAIL").toUpperCase()
 
     if (!name) throw new Error('Customer name is mathematically required.')
 
@@ -70,6 +73,7 @@ export async function updateCustomer(customerId: string, formData: FormData) {
             .set({
                 name,
                 phone,
+                customer_type: customerType,
                 old_balance: oldBalanceStr
             })
             .where(and(

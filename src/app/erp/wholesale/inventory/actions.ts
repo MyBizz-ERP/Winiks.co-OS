@@ -1,10 +1,10 @@
 'use server'
 
 import { db } from "@/db"
-import { products, purchaseItems, purchaseBills, suppliers } from "@/db/schema/wholesale"
+import { products, purchaseItems, purchaseBills, suppliers, invoiceItems } from "@/db/schema/wholesale"
 import { shops } from "@/db/schema/admin"
 import { createClient } from "@/utils/supabase/server"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, inArray, and } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 // High-Security Tenant Resolution Layer
@@ -43,6 +43,7 @@ export async function addProduct(formData: FormData) {
         const buy_rate = formData.get("buy_rate") ? parseFloat(formData.get("buy_rate") as string) : 0
         const sell_rate = formData.get("sell_rate") ? parseFloat(formData.get("sell_rate") as string) : 0
         const wholesale_rate = formData.get("wholesale_rate") ? parseFloat(formData.get("wholesale_rate") as string) : sell_rate
+        const min_wholesale_qty = formData.get("min_wholesale_qty") ? parseInt(formData.get("min_wholesale_qty") as string) : 12
         const stock = formData.get("stock") ? parseInt(formData.get("stock") as string) : 0
         const min_stock = formData.get("min_stock") ? parseInt(formData.get("min_stock") as string) : 5
 
@@ -57,6 +58,7 @@ export async function addProduct(formData: FormData) {
             buy_rate: buy_rate.toString(),
             sell_rate: sell_rate.toString(),
             wholesale_rate: wholesale_rate.toString(),
+            min_wholesale_qty: isNaN(min_wholesale_qty) ? 12 : min_wholesale_qty,
             stock,
             min_stock
         })
@@ -97,6 +99,7 @@ export async function updateInventoryItem(formData: FormData) {
         const buy_rate = formData.get("buy_rate") ? parseFloat(formData.get("buy_rate") as string) : 0
         const sell_rate = formData.get("sell_rate") ? parseFloat(formData.get("sell_rate") as string) : 0
         const wholesale_rate = formData.get("wholesale_rate") ? parseFloat(formData.get("wholesale_rate") as string) : sell_rate
+        const min_wholesale_qty = formData.get("min_wholesale_qty") ? parseInt(formData.get("min_wholesale_qty") as string) : 12
         const stock = formData.get("stock") ? parseInt(formData.get("stock") as string) : 0
 
         if (!id || !name) throw new Error("Product ID and Name required")
@@ -107,12 +110,41 @@ export async function updateInventoryItem(formData: FormData) {
             buy_rate: buy_rate.toString(),
             sell_rate: sell_rate.toString(),
             wholesale_rate: wholesale_rate.toString(),
+            min_wholesale_qty: isNaN(min_wholesale_qty) ? 12 : min_wholesale_qty,
             stock
         }).where(eq(products.id, id))
 
         revalidatePath("/erp/wholesale/inventory")
         revalidatePath("/erp/wholesale/pos")
         revalidatePath("/erp/wholesale/purchase")
+        return { success: true }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+
+// Shopify-Style Inline Quick Edit Action
+export async function quickUpdateProductField(id: string, field: 'sell_rate' | 'wholesale_rate' | 'min_wholesale_qty' | 'stock' | 'buy_rate', value: any) {
+    try {
+        const shopId = await getActiveShopId()
+
+        const updateData: any = {}
+        if (field === 'sell_rate' || field === 'wholesale_rate' || field === 'buy_rate') {
+            const num = parseFloat(String(value))
+            if (isNaN(num)) throw new Error("Invalid rate number")
+            updateData[field] = num.toString()
+        } else if (field === 'min_wholesale_qty' || field === 'stock') {
+            const num = parseInt(String(value), 10)
+            if (isNaN(num)) throw new Error("Invalid quantity number")
+            updateData[field] = num
+        }
+
+        await db.update(products)
+            .set(updateData)
+            .where(eq(products.id, id))
+
+        revalidatePath("/erp/wholesale/inventory")
+        revalidatePath("/erp/wholesale/pos")
         return { success: true }
     } catch (e: any) {
         return { success: false, error: e.message }
@@ -130,7 +162,8 @@ export async function bulkAddProducts(items: any[]) {
             name_mr: item.name_mr,
             buy_rate: (item.buy_rate || 0).toString(),
             sell_rate: (item.sell_rate || 0).toString(),
-            wholesale_rate: (item.wholesale_rate || 0).toString(),
+            wholesale_rate: (item.wholesale_rate || item.sell_rate || 0).toString(),
+            min_wholesale_qty: item.min_wholesale_qty ? parseInt(item.min_wholesale_qty, 10) : 12,
             stock: item.stock || 0,
             min_stock: item.min_stock || 5
         }))
@@ -144,3 +177,47 @@ export async function bulkAddProducts(items: any[]) {
         return { success: false, error: e.message }
     }
 }
+
+export async function bulkDeleteProducts(productIds: string[]) {
+    try {
+        if (!productIds || productIds.length === 0) return { success: true, deletedCount: 0 }
+        const shopId = await getActiveShopId()
+
+        // Check if any products are referenced in invoices or purchases
+        const usedInInvoices = await db.select({ productId: invoiceItems.product_id })
+            .from(invoiceItems)
+            .where(inArray(invoiceItems.product_id, productIds))
+        const invoiceProdIds = new Set(usedInInvoices.map(i => i.productId))
+
+        const usedInPurchases = await db.select({ productId: purchaseItems.product_id })
+            .from(purchaseItems)
+            .where(inArray(purchaseItems.product_id, productIds))
+        const purchaseProdIds = new Set(usedInPurchases.map(p => p.productId))
+
+        const safeToDeleteIds = productIds.filter(id => !invoiceProdIds.has(id) && !purchaseProdIds.has(id))
+        const blockedCount = productIds.length - safeToDeleteIds.length
+
+        if (safeToDeleteIds.length > 0) {
+            await db.delete(products)
+                .where(and(eq(products.shop_id, shopId), inArray(products.id, safeToDeleteIds)))
+        }
+
+        revalidatePath("/erp/wholesale/inventory")
+        revalidatePath("/erp/wholesale/pos")
+        revalidatePath("/erp/wholesale/purchase")
+
+        if (blockedCount > 0) {
+            return {
+                success: true,
+                deletedCount: safeToDeleteIds.length,
+                blockedCount,
+                message: `Deleted ${safeToDeleteIds.length} products. ${blockedCount} product(s) could not be deleted because they are locked to historical sales or purchase records.`
+            }
+        }
+
+        return { success: true, deletedCount: safeToDeleteIds.length }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+

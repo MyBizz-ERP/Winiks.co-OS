@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Plus, X, Search, Phone, IndianRupee, Trash2, User, Download, Edit, CheckCircle2, TrendingUp } from 'lucide-react'
+import { Users, Plus, X, Search, Phone, IndianRupee, Trash2, User, Download, Edit, CheckCircle2, TrendingUp, Truck } from 'lucide-react'
 import { createSupplier, deleteSupplier, updateSupplier, addManualSupplierDebt, addManualSupplierPayment } from '../actions'
 
 export default function SupplierClient({ initialSuppliers }: { initialSuppliers: any[] }) {
+    const router = useRouter()
+    const [supplierList, setSupplierList] = useState<any[]>(initialSuppliers || [])
     const [search, setSearch] = useState('')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -13,13 +16,17 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
     const [editingSupplier, setEditingSupplier] = useState<any>(null)
     const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL')
 
+    useEffect(() => {
+        setSupplierList(initialSuppliers || [])
+    }, [initialSuppliers])
+
     // Add manual actions state
     const [payingId, setPayingId] = useState<string | null>(null)
     const [payAmount, setPayAmount] = useState('')
     const [addingId, setAddingId] = useState<string | null>(null)
     const [addAmount, setAddAmount] = useState('')
 
-    const filtered = initialSuppliers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
+    const filtered = supplierList.filter(c => (c.name || '').toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
 
     const filterStart = new Date(); filterStart.setHours(0, 0, 0, 0)
     if (dateFilter === '7D') filterStart.setDate(filterStart.getDate() - 7)
@@ -27,10 +34,10 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
 
     const dateSegmented = dateFilter === 'ALL' ? filtered : filtered.filter(c => c.created_at && new Date(c.created_at) >= filterStart)
 
-    const totalUdhaari = dateSegmented.reduce((sum, curr) => sum + parseFloat(curr.current_balance || '0'), 0)
+    const totalUdhaari = dateSegmented.reduce((sum, curr) => sum + (parseFloat(curr.current_balance) || 0), 0)
 
     const exportCSV = () => {
-        const rows = [["Client Identity", "Contact", "Udhaari Debt (₹)"]]
+        const rows = [["Supplier Identity", "Contact", "Outstanding Payable (₹)"]]
         dateSegmented.forEach(c => {
             rows.push([c.name, c.phone || 'N/A', c.current_balance || '0'])
         })
@@ -49,6 +56,7 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
         try {
             await createSupplier(formData)
             setIsAddModalOpen(false)
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -62,6 +70,7 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
         try {
             await updateSupplier(editingSupplier.id, formData)
             setEditingSupplier(null)
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -70,10 +79,12 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
     }
 
     async function handleDelete(id: string) {
-        if (!confirm("Are you sure you want to delete this client? All Udhaari records mapped here will be permanently severed.")) return
+        if (!confirm("Are you sure you want to delete this supplier?")) return
         setIsDeletingId(id)
         try {
             await deleteSupplier(id)
+            setSupplierList(prev => prev.filter(s => s.id !== id))
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -87,9 +98,16 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
         setIsSubmitting(true)
         try {
             await addManualSupplierPayment(supplierId, amount)
+            setSupplierList(prev => prev.map(s => {
+                if (s.id === supplierId) {
+                    const cur = parseFloat(s.current_balance) || 0
+                    return { ...s, current_balance: Math.max(0, cur - amount).toString() }
+                }
+                return s
+            }))
             setPayingId(null)
             setPayAmount('')
-            window.location.reload()
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -103,9 +121,16 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
         setIsSubmitting(true)
         try {
             await addManualSupplierDebt(supplierId, amount)
+            setSupplierList(prev => prev.map(s => {
+                if (s.id === supplierId) {
+                    const cur = parseFloat(s.current_balance) || 0
+                    return { ...s, current_balance: (cur + amount).toString() }
+                }
+                return s
+            }))
             setAddingId(null)
             setAddAmount('')
-            window.location.reload()
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -119,18 +144,18 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-                        <Users className="w-8 h-8 text-indigo-500" /> Client Roster
+                        <Truck className="w-8 h-8 text-indigo-500" /> Supplier Directory
                     </h1>
                     <p className="text-[13px] text-slate-500 mt-1 max-w-xl">
-                        Global repository of all authorized B2B buyers. Actively syncs and computes Live Udhaari (credit balances) mapped flawlessly across the entire Kharedi network.
+                        Global vendor registry for stock replenishment and accounts payable tracking.
                     </p>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                     <button
                         onClick={() => setIsAddModalOpen(true)}
                         className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0"
                     >
-                        <Plus className="w-4 h-4" /> Onboard Buyer
+                        <Plus className="w-4 h-4" /> Onboard Supplier
                     </button>
                     <button
                         onClick={exportCSV}
@@ -181,13 +206,140 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile View: Adaptive Polaris Cards */}
+                <div className="block md:hidden divide-y divide-slate-100 p-3">
+                    {filtered.length === 0 ? (
+                        <div className="py-12 text-center text-slate-400 text-xs">No suppliers found in this sector.</div>
+                    ) : (
+                        dateSegmented.map(supplier => {
+                            const bal = parseFloat(supplier.current_balance) || 0
+                            return (
+                                <div key={supplier.id} className="py-3.5 space-y-2.5">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shrink-0">
+                                                {(supplier.name || 'S').substring(0, 2)}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-sm text-slate-900">{supplier.name}</p>
+                                                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                    <Phone className="w-3 h-3 text-slate-400" />
+                                                    {supplier.phone || 'No contact'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${bal > 0 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
+                                                <IndianRupee className="w-3 h-3 opacity-70" />
+                                                {bal.toLocaleString('en-IN')}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action row */}
+                                    {payingId === supplier.id ? (
+                                        <div className="flex items-center gap-2 p-2 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                                <input
+                                                    autoFocus
+                                                    type="number"
+                                                    value={payAmount}
+                                                    onChange={e => setPayAmount(e.target.value)}
+                                                    placeholder="Amount"
+                                                    className="w-full pl-6 pr-2 h-9 border border-indigo-300 rounded-lg text-xs font-bold focus:border-indigo-500 outline-none"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => handleRecordPayment(supplier.id)}
+                                                disabled={isSubmitting}
+                                                className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-all disabled:opacity-50 shrink-0"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={() => { setPayingId(null); setPayAmount('') }}
+                                                className="h-9 px-2.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg shrink-0"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ) : addingId === supplier.id ? (
+                                        <div className="flex items-center gap-2 p-2 bg-rose-50/50 rounded-xl border border-rose-100">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                                <input
+                                                    autoFocus
+                                                    type="number"
+                                                    value={addAmount}
+                                                    onChange={e => setAddAmount(e.target.value)}
+                                                    placeholder="Amount"
+                                                    className="w-full pl-6 pr-2 h-9 border border-rose-300 rounded-lg text-xs font-bold focus:border-rose-500 outline-none"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => handleRecordDebt(supplier.id)}
+                                                disabled={isSubmitting}
+                                                className="h-9 px-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-all disabled:opacity-50 shrink-0"
+                                            >
+                                                Add
+                                            </button>
+                                            <button
+                                                onClick={() => { setAddingId(null); setAddAmount('') }}
+                                                className="h-9 px-2.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg shrink-0"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between pt-1 border-t border-slate-50 text-xs">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                UID: {supplier.id.split('-')[0]}
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => { setPayingId(supplier.id); setAddingId(null) }}
+                                                    disabled={bal <= 0}
+                                                    className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg disabled:opacity-30"
+                                                >
+                                                    Pay
+                                                </button>
+                                                <button
+                                                    onClick={() => { setAddingId(supplier.id); setPayingId(null) }}
+                                                    className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg"
+                                                >
+                                                    + Due
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingSupplier(supplier)}
+                                                    className="p-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold"
+                                                >
+                                                    <Edit className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(supplier.id)}
+                                                    disabled={isDeletingId === supplier.id}
+                                                    className="p-1 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold disabled:opacity-50"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+
+                {/* Desktop View: High-Density Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left font-sans">
                         <thead className="bg-[#f8fafc] text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <th className="px-6 py-4">Client Identity</th>
-                                <th className="px-6 py-4">Contact Vector</th>
-                                <th className="px-6 py-4 text-right">Live Udhaari (Debt)</th>
+                                <th className="px-6 py-4">Supplier Identity</th>
+                                <th className="px-6 py-4">Contact</th>
+                                <th className="px-6 py-4 text-right">Outstanding Payable (₹)</th>
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -197,7 +349,7 @@ export default function SupplierClient({ initialSuppliers }: { initialSuppliers:
                                     <td colSpan={4} className="px-6 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center space-y-3 opacity-50">
                                             <Users className="w-8 h-8 text-slate-400" />
-                                            <p className="text-[14px] font-semibold text-slate-600">No buyers found in this sector.</p>
+                                            <p className="text-[14px] font-semibold text-slate-600">No suppliers found in this sector.</p>
                                         </div>
                                     </td>
                                 </tr>

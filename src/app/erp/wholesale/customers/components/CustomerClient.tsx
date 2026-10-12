@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Users, Plus, X, Search, Phone, IndianRupee, Trash2, User, Download, Edit } from 'lucide-react'
 import { createCustomer, deleteCustomer, updateCustomer } from '../actions'
 
 export default function CustomerClient({ initialCustomers }: { initialCustomers: any[] }) {
+    const router = useRouter()
+    const [customerList, setCustomerList] = useState<any[]>(initialCustomers || [])
     const [search, setSearch] = useState('')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -13,7 +16,11 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
     const [editingCustomer, setEditingCustomer] = useState<any>(null)
     const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL')
 
-    const filtered = initialCustomers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
+    useEffect(() => {
+        setCustomerList(initialCustomers || [])
+    }, [initialCustomers])
+
+    const filtered = customerList.filter(c => (c.name || '').toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
 
     const filterStart = new Date(); filterStart.setHours(0, 0, 0, 0)
     if (dateFilter === '7D') filterStart.setDate(filterStart.getDate() - 7)
@@ -43,6 +50,7 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
         try {
             await createCustomer(formData)
             setIsAddModalOpen(false)
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -56,6 +64,7 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
         try {
             await updateCustomer(editingCustomer.id, formData)
             setEditingCustomer(null)
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -68,6 +77,8 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
         setIsDeletingId(id)
         try {
             await deleteCustomer(id)
+            setCustomerList(prev => prev.filter(c => c.id !== id))
+            router.refresh()
         } catch (e: any) {
             alert(e.message)
         } finally {
@@ -143,7 +154,87 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile View: Adaptive Polaris Cards */}
+                <div className="block md:hidden divide-y divide-slate-100 p-3">
+                    {filtered.length === 0 ? (
+                        <div className="py-12 text-center text-slate-400 text-xs">No buyers found in this sector.</div>
+                    ) : (
+                        dateSegmented.map(customer => {
+                            const bal = parseFloat(customer.old_balance) || 0
+                            const isWholesale = customer.customer_type === 'WHOLESALE'
+                            return (
+                                <div key={customer.id} className="py-3.5 space-y-2.5">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase shrink-0">
+                                                {(customer.name || 'C').substring(0, 2)}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <p className="font-bold text-sm text-slate-900">{customer.name}</p>
+                                                    {isWholesale ? (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200">
+                                                            Wholesale B2B
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider text-slate-500 bg-slate-100 border border-slate-200">
+                                                            Retail
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                    <Phone className="w-3 h-3 text-slate-400" />
+                                                    {customer.phone || 'No contact'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${bal > 0 ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
+                                                <IndianRupee className="w-3 h-3 opacity-70" />
+                                                {bal.toLocaleString('en-IN')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-1 border-t border-slate-50 text-xs">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                            UID: {customer.id.split('-')[0]}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {customer.phone && bal > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const clean = customer.phone.replace(/[^0-9]/g, '')
+                                                        const p = clean.length === 10 ? `91${clean}` : clean
+                                                        window.open(`https://wa.me/${p}?text=${encodeURIComponent(`Namaskar ${customer.name}, Reminder: Your pending Udhaari balance is Rs. ${bal.toFixed(2)}. Dhanyawad!`)}`, '_blank')
+                                                    }}
+                                                    className="px-2.5 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 text-xs font-bold flex items-center gap-1"
+                                                >
+                                                    WhatsApp
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setEditingCustomer(customer)}
+                                                className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold flex items-center gap-1"
+                                            >
+                                                <Edit className="w-3 h-3" /> Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(customer.id)}
+                                                disabled={isDeletingId === customer.id}
+                                                className="p-1 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold disabled:opacity-50"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+
+                {/* Desktop View: High-Density Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left font-sans">
                         <thead className="bg-[#f8fafc] text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                             <tr>
@@ -178,7 +269,18 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                                                         {customer.name.substring(0, 2)}
                                                     </div>
                                                     <div>
-                                                        <p className="text-[14px] font-bold text-slate-800">{customer.name}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-[14px] font-bold text-slate-800">{customer.name}</p>
+                                                            {customer.customer_type === 'WHOLESALE' ? (
+                                                                <span className="inline-flex items-center text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                                    Wholesale B2B
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                                    Retail
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mt-0.5">UID: {customer.id.split('-')[0]}</p>
                                                     </div>
                                                 </div>
@@ -197,11 +299,24 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                                             </td>
                                             <td className="px-6 py-3.5 text-right">
                                                 <div className="flex justify-end gap-2">
+                                                    {customer.phone && bal > 0 && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const clean = customer.phone.replace(/[^0-9]/g, '')
+                                                                const p = clean.length === 10 ? `91${clean}` : clean
+                                                                window.open(`https://wa.me/${p}?text=${encodeURIComponent(`Namaskar ${customer.name}, Reminder: Your pending Udhaari balance is Rs. ${bal.toFixed(2)}. Dhanyawad!`)}`, '_blank')
+                                                            }}
+                                                            title="WhatsApp Reminder"
+                                                            className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-green-600 hover:bg-green-50 hover:border-green-200 transition-all"
+                                                        >
+                                                            <Phone className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     <button onClick={() => setEditingCustomer(customer)} className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-all"><Edit className="w-4 h-4" /></button>
                                                     <button
                                                         onClick={() => handleDelete(customer.id)}
                                                         disabled={isDeletingId === customer.id}
-                                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all ml-auto disabled:opacity-50"
+                                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all disabled:opacity-50"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
@@ -250,6 +365,13 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                                     <input required name="name" type="text" placeholder="e.g. Ramesh Stores" className="w-full px-4 h-11 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900 text-[14px] font-medium focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all" />
                                 </div>
                                 <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block">Buyer Category</label>
+                                    <select name="customer_type" defaultValue="RETAIL" className="w-full px-3 h-11 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900 font-semibold text-[13px] outline-none focus:border-indigo-500">
+                                        <option value="RETAIL">Standard Retail Buyer</option>
+                                        <option value="WHOLESALE">Wholesale / B2B Partner (Auto-Tier Pricing)</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
                                     <label className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block">Contact Number</label>
                                     <input name="phone" type="text" className="w-full px-4 h-11 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900 text-[14px] focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all" />
                                 </div>
@@ -287,7 +409,7 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            exit={{ opacity: 0, scale: 1, y: 0 }}
                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                             className="bg-white border border-slate-200 rounded-3xl w-full max-w-sm overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] relative z-10"
                         >
@@ -304,6 +426,13 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                                 <div className="space-y-1.5">
                                     <label className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block">Business Name</label>
                                     <input required name="name" type="text" defaultValue={editingCustomer.name} autoFocus className="w-full px-4 h-11 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900 text-[14px] font-medium focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block">Buyer Category</label>
+                                    <select name="customer_type" defaultValue={editingCustomer.customer_type || "RETAIL"} className="w-full px-3 h-11 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900 font-semibold text-[13px] outline-none focus:border-indigo-500">
+                                        <option value="RETAIL">Standard Retail Buyer</option>
+                                        <option value="WHOLESALE">Wholesale / B2B Partner (Auto-Tier Pricing)</option>
+                                    </select>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-[11px] font-bold text-slate-600 uppercase tracking-widest block">Contact Number</label>

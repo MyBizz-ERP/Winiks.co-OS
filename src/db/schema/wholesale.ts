@@ -13,6 +13,7 @@ export const products = wholesaleSchema.table("products", {
     buy_rate: decimal("buy_rate", { precision: 10, scale: 2 }),
     sell_rate: decimal("sell_rate", { precision: 10, scale: 2 }).notNull(),
     wholesale_rate: decimal("wholesale_rate", { precision: 10, scale: 2 }).notNull(),
+    min_wholesale_qty: integer("min_wholesale_qty").default(12),
     min_stock: integer("min_stock").default(5),
     created_at: timestamp("created_at").defaultNow().notNull(),
 });
@@ -23,6 +24,7 @@ export const customers = wholesaleSchema.table("customers", {
     name: text("name").notNull(),
     phone: text("phone"),
     email: text("email"),
+    customer_type: text("customer_type").default("RETAIL").notNull(),
     old_balance: decimal("old_balance", { precision: 12, scale: 2 }).default("0").notNull(),
     created_at: timestamp("created_at").defaultNow().notNull(),
 });

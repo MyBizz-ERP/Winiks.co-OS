@@ -2,12 +2,42 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Plus, Minus, Trash2, ShoppingCart, User, IndianRupee, Printer, CheckCircle2, X, Eye } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, User, IndianRupee, Printer, CheckCircle2, X, Eye, Users, ChevronDown, UserPlus } from 'lucide-react'
 import SharedThermalReceipt from '../../components/SharedThermalReceipt'
+import { quickCreateCustomer } from '../actions'
 
-interface Product { id: string; name: string; name_mr: string | null; stock: number; sell_rate: string; wholesale_rate: string; buy_rate: string | null }
-interface Customer { id: string; name: string; phone: string | null; old_balance: string }
-interface CartItem extends Product { qty: number; rate: number }
+interface Product { id: string; name: string; name_mr: string | null; stock: number; sell_rate: string; wholesale_rate: string; min_wholesale_qty?: number | null; buy_rate: string | null }
+interface Customer { id: string; name: string; phone: string | null; customer_type?: string; old_balance: string }
+interface CartItem extends Product { qty: number; rate: number; tierReason?: 'WHOLESALE_PARTY' | 'BULK_SLAB' | 'RETAIL' | 'MANUAL'; isManualPrice?: boolean }
+
+// Option 3 Autonomous Smart Tiered Pricing Calculator
+function computeSmartRate(product: Product, qty: number, customer: Customer | null, isWholesaleMode: boolean) {
+    const sell = parseFloat(product.sell_rate) || 0
+    const wholesale = parseFloat(product.wholesale_rate) || sell
+    const minQty = product.min_wholesale_qty || 12
+
+    // Margin guard: If wholesale_rate == sell_rate, never discount
+    if (wholesale >= sell) {
+        return { rate: sell, tierReason: 'RETAIL' as const }
+    }
+
+    // Force mode toggle override
+    if (isWholesaleMode) {
+        return { rate: wholesale, tierReason: 'WHOLESALE_PARTY' as const }
+    }
+
+    // Rule A: Customer is tagged as WHOLESALE
+    if (customer && customer.customer_type === 'WHOLESALE') {
+        return { rate: wholesale, tierReason: 'WHOLESALE_PARTY' as const }
+    }
+
+    // Rule B: Quantity meets or exceeds min bulk threshold
+    if (qty >= minQty) {
+        return { rate: wholesale, tierReason: 'BULK_SLAB' as const }
+    }
+
+    return { rate: sell, tierReason: 'RETAIL' as const }
+}
 
 export default function POSClient({ products, customers, shop }: { products: Product[], customers: Customer[], shop: any }) {
     const [cart, setCart] = useState<CartItem[]>([])
@@ -28,6 +58,20 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     const [stagingRate, setStagingRate] = useState('')
     const stagingQtyRef = useRef<HTMLInputElement>(null)
     const stagingRateRef = useRef<HTMLInputElement>(null)
+
+    // Quick Add Buyer & Resilient Customer State
+    const [customerList, setCustomerList] = useState<Customer[]>(customers || [])
+    const [isCustDropdownOpen, setIsCustDropdownOpen] = useState(false)
+    const [isAddCustModalOpen, setIsAddCustModalOpen] = useState(false)
+    const [newCustName, setNewCustName] = useState('')
+    const [newCustPhone, setNewCustPhone] = useState('')
+    const [newCustType, setNewCustType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL')
+    const [newCustBalance, setNewCustBalance] = useState('')
+    const [isSavingCustomer, setIsSavingCustomer] = useState(false)
+
+    useEffect(() => {
+        setCustomerList(customers || [])
+    }, [customers])
 
     // Offline Daemon Flush
     useEffect(() => {
@@ -109,17 +153,22 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     const [receiptLang, setReceiptLang] = useState<'ENG' | 'MAR'>('MAR')
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'ONLINE'>('CASH')
     const [showPreview, setShowPreview] = useState(false)
-    const [isWholesaleMode, setIsWholesaleMode] = useState(false) // Default Retail
+    const [isWholesaleMode, setIsWholesaleMode] = useState(false)
 
-    // Reactive Cart Pricing Toggle
+    // Reactive Option 3 Smart Pricing Trigger: Recomputes cart rates when Customer or Global Wholesale Mode changes
     useEffect(() => {
         if (cart.length > 0) {
-            setCart(prev => prev.map(item => ({
-                ...item,
-                rate: parseFloat(String(isWholesaleMode ? (item.wholesale_rate || item.sell_rate) : item.sell_rate))
-            })))
+            setCart(prev => prev.map(item => {
+                if (item.isManualPrice) return item // Respect manual overrides
+                const computed = computeSmartRate(item, item.qty, selectedCustomer, isWholesaleMode)
+                return {
+                    ...item,
+                    rate: computed.rate,
+                    tierReason: computed.tierReason
+                }
+            }))
         }
-    }, [isWholesaleMode])
+    }, [selectedCustomer, isWholesaleMode])
 
     const searchRef = useRef<HTMLInputElement>(null)
     const customerSearchRef = useRef<HTMLInputElement>(null)
@@ -129,7 +178,15 @@ export default function POSClient({ products, customers, shop }: { products: Pro
 
     const searchTerms = search.toLowerCase().split(' ').filter(Boolean)
     const filteredProducts = products.filter(p => searchTerms.every(term => p.name.toLowerCase().includes(term)))
-    const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone && c.phone.includes(customerSearch)))
+
+    const cQuery = (customerSearch || '').trim().toLowerCase()
+    const filteredCustomers = customerList.filter(c => {
+        if (!c) return false
+        if (!cQuery) return true
+        const nameMatch = (c.name || '').toLowerCase().includes(cQuery)
+        const phoneMatch = Boolean(c.phone && c.phone.includes(cQuery))
+        return nameMatch || phoneMatch
+    })
 
     const subtotal = cart.reduce((s, i) => s + i.qty * i.rate, 0)
     const netTotal = subtotal - discount
@@ -141,30 +198,69 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     function prepareItem(product: Product) {
         setCart(prev => {
             const exists = prev.find(i => i.id === product.id)
-            if (exists) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i)
-            return [...prev, { ...product, qty: 1, rate: parseFloat(isWholesaleMode ? (product.wholesale_rate || product.sell_rate) : product.sell_rate) }]
+            if (exists) {
+                const newQty = exists.qty + 1
+                const computed = exists.isManualPrice ? { rate: exists.rate, tierReason: exists.tierReason } : computeSmartRate(exists, newQty, selectedCustomer, isWholesaleMode)
+                return prev.map(i => i.id === product.id ? { ...i, qty: newQty, rate: computed.rate, tierReason: computed.tierReason } : i)
+            }
+            const computed = computeSmartRate(product, 1, selectedCustomer, isWholesaleMode)
+            return [...prev, { ...product, qty: 1, rate: computed.rate, tierReason: computed.tierReason, isManualPrice: false }]
         })
         setSearch('')
         setSelectedProdIdx(0)
         setTimeout(() => document.getElementById(`qty-input-${product.id}`)?.focus(), 50)
     }
 
-    // Auto-recalculate cart prices when mode is violently switched
-    useEffect(() => {
-        setCart(prev => prev.map(item => ({
-            ...item,
-            rate: parseFloat(isWholesaleMode ? (item.wholesale_rate || item.sell_rate) : item.sell_rate)
-        })))
-    }, [isWholesaleMode])
-
     function setQty(id: string, qty: number) {
-        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, qty) } : i))
+        const safeQty = Math.max(1, qty)
+        setCart(prev => prev.map(i => {
+            if (i.id !== id) return i
+            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty, selectedCustomer, isWholesaleMode)
+            return { ...i, qty: safeQty, rate: computed.rate, tierReason: computed.tierReason }
+        }))
     }
+
     function updateQty(id: string, delta: number) {
-        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i).filter(i => i.qty > 0))
+        setCart(prev => prev.map(i => {
+            if (i.id !== id) return i
+            const safeQty = Math.max(1, i.qty + delta)
+            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty, selectedCustomer, isWholesaleMode)
+            return { ...i, qty: safeQty, rate: computed.rate, tierReason: computed.tierReason }
+        }).filter(i => i.qty > 0))
     }
+
     function removeItem(id: string) { setCart(p => p.filter(i => i.id !== id)) }
-    function updateRate(id: string, rate: number) { setCart(prev => prev.map(i => i.id === id ? { ...i, rate } : i)) }
+
+    function updateRate(id: string, rate: number) {
+        setCart(prev => prev.map(i => i.id === id ? { ...i, rate, isManualPrice: true, tierReason: 'MANUAL' } : i))
+    }
+
+    async function handleQuickAddCustomer(e: React.FormEvent) {
+        e.preventDefault()
+        if (!newCustName.trim()) return alert('Customer name is required')
+        setIsSavingCustomer(true)
+        try {
+            const created = await quickCreateCustomer({
+                name: newCustName.trim(),
+                phone: newCustPhone.trim() || null,
+                customer_type: newCustType,
+                old_balance: newCustBalance || '0'
+            })
+            setCustomerList(prev => [created as any, ...prev])
+            setSelectedCustomer(created as any)
+            setCustomerSearch('')
+            setIsCustDropdownOpen(false)
+            setIsAddCustModalOpen(false)
+            setNewCustName('')
+            setNewCustPhone('')
+            setNewCustType('RETAIL')
+            setNewCustBalance('')
+        } catch (err: any) {
+            alert(err.message || 'Failed to create customer')
+        } finally {
+            setIsSavingCustomer(false)
+        }
+    }
 
     async function handleCheckout() {
         if (isSubmitting) return
@@ -173,6 +269,8 @@ export default function POSClient({ products, customers, shop }: { products: Pro
             cart,
             customerId: selectedCustomer?.id || null,
             customerName: selectedCustomer?.id === 'NEW' ? selectedCustomer.name : undefined,
+            customerType: selectedCustomer?.customer_type || 'RETAIL',
+            customerPhone: selectedCustomer?.phone || undefined,
             discount,
             amountPaid: paid,
             subtotal,
@@ -272,13 +370,44 @@ export default function POSClient({ products, customers, shop }: { products: Pro
             <div className="flex-1 flex flex-col gap-4 print:hidden">
                 {/* Product Search */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm relative z-50 overflow-visible">
-                    <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs tracking-widest text-slate-500 uppercase">Pricing Mode</span>
+                    <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="font-bold text-xs tracking-wider text-slate-700 uppercase">
+                                Autonomous Pricing Engine
+                            </span>
+                            {selectedCustomer?.customer_type === 'WHOLESALE' ? (
+                                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                                    🏷️ Wholesale B2B Party Active
+                                </span>
+                            ) : isWholesaleMode ? (
+                                <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-300">
+                                    ⚡ Manual B2B Override
+                                </span>
+                            ) : (
+                                <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-full">
+                                    Slabs: Auto B2B on ≥ Min Qty
+                                </span>
+                            )}
                         </div>
-                        <div className="flex items-center gap-1.5 bg-slate-200/50 rounded-lg p-1 border border-slate-200 shadow-inner">
-                            <button onClick={() => setIsWholesaleMode(false)} className={`px-4 py-1.5 rounded text-[11px] font-black uppercase tracking-widest transition-all ${!isWholesaleMode ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-700'}`}>Retail</button>
-                            <button onClick={() => setIsWholesaleMode(true)} className={`px-4 py-1.5 rounded text-[11px] font-black uppercase tracking-widest transition-all ${isWholesaleMode ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>B2B Wholesale</button>
+                        <div className="flex items-center gap-1.5">
+                            {isWholesaleMode ? (
+                                <button
+                                    onClick={() => setIsWholesaleMode(false)}
+                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-1"
+                                    title="Disable manual override and return to auto tiering"
+                                >
+                                    <X className="w-3 h-3" /> Reset to Auto
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setIsWholesaleMode(true)}
+                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-slate-200 transition-all"
+                                    title="Force wholesale rate for walk-in retail customer"
+                                >
+                                    Force B2B Rate
+                                </button>
+                            )}
                         </div>
                     </div>
                     <div className="p-3 border-slate-100">
@@ -325,7 +454,9 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[14px] font-bold text-indigo-600">₹{parseFloat(p.sell_rate).toFixed(2)}</p>
-                                        <p className="text-[11px] text-slate-400">WH: ₹{parseFloat(p.wholesale_rate).toFixed(2)}</p>
+                                        <p className="text-[11px] text-emerald-700 font-semibold">
+                                            WH: ₹{parseFloat(p.wholesale_rate || p.sell_rate).toFixed(2)} (≥{p.min_wholesale_qty || 12})
+                                        </p>
                                     </div>
                                 </button>
                             ))}
@@ -359,7 +490,26 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                 <tbody className="divide-y divide-slate-50">
                                     {cart.map(item => (
                                         <tr key={item.id} className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 text-[13px] font-semibold text-slate-800">{item.name}</td>
+                                            <td className="px-4 py-3 text-[13px] font-semibold text-slate-800">
+                                                <div className="font-bold">{item.name}</div>
+                                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                                    {item.tierReason === 'WHOLESALE_PARTY' && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                            🏷️ B2B Party
+                                                        </span>
+                                                    )}
+                                                    {item.tierReason === 'BULK_SLAB' && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                                            📦 Bulk Slab (≥{item.min_wholesale_qty || 12})
+                                                        </span>
+                                                    )}
+                                                    {item.isManualPrice && (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                                            ✏️ Custom Rate
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-1.5 justify-center">
                                                     <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"><Minus className="w-4 h-4" /></button>
@@ -388,68 +538,164 @@ export default function POSClient({ products, customers, shop }: { products: Pro
 
                 {/* Customer Select */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-visible">
-                    <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-                        <User className="w-4 h-4 text-indigo-500" />
-                        <h3 className="font-bold text-[14px] text-slate-800">Buyer Selection</h3>
+                    <div className="p-3.5 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-indigo-500" />
+                            <h3 className="font-bold text-[13px] text-slate-800">Buyer Selection</h3>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setNewCustName(customerSearch)
+                                setIsAddCustModalOpen(true)
+                            }}
+                            className="px-2 py-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> + New Buyer
+                        </button>
                     </div>
                     <div className="p-3">
                         {selectedCustomer ? (
-                            <div className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                            <div className="flex items-center justify-between bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-3.5 shadow-sm">
                                 <div>
-                                    <p className="font-bold text-[14px] text-indigo-900">{selectedCustomer.name}</p>
-                                    <p className="text-[12px] text-indigo-600 font-medium">Udhaari: ₹{parseFloat(selectedCustomer.old_balance).toFixed(2)}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-[14px] text-indigo-950">{selectedCustomer.name}</p>
+                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${selectedCustomer.customer_type === 'WHOLESALE'
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : 'bg-slate-200 text-slate-700'
+                                            }`}>
+                                            {selectedCustomer.customer_type === 'WHOLESALE' ? '🏷️ Wholesale B2B' : 'Retail'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 font-medium">
+                                        {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
+                                        <span className="text-rose-600 font-bold">Due: ₹{parseFloat(selectedCustomer.old_balance || '0').toFixed(2)}</span>
+                                    </div>
+                                    {selectedCustomer.customer_type === 'WHOLESALE' && (
+                                        <p className="text-[10px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                                            ✓ Tiered Wholesale Rates Auto-Applied
+                                        </p>
+                                    )}
                                 </div>
-                                <button onClick={() => setSelectedCustomer(null)} className="text-indigo-400 hover:text-indigo-700"><X className="w-4 h-4" /></button>
+                                <button
+                                    onClick={() => setSelectedCustomer(null)}
+                                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-white transition-colors"
+                                    title="Deselect Customer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
                         ) : (
                             <div className="relative z-50">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                                <input
-                                    tabIndex={2}
-                                    ref={customerSearchRef}
-                                    value={customerSearch}
-                                    onChange={e => setCustomerSearch(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault()
-                                            if (e.ctrlKey) {
-                                                discountRef.current?.focus()
-                                            } else if (customerSearch && filteredCustomers.length > 0) {
-                                                setSelectedCustomer(filteredCustomers[0])
-                                                setCustomerSearch('')
-                                                discountRef.current?.focus()
-                                            } else if (customerSearch && filteredCustomers.length === 0) {
-                                                setSelectedCustomer({ id: 'NEW', name: customerSearch, phone: '', old_balance: '0' })
-                                                setCustomerSearch('')
-                                                discountRef.current?.focus()
-                                            } else if (!customerSearch) {
-                                                discountRef.current?.focus()
+                                <div className="relative flex items-center">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                    <input
+                                        tabIndex={2}
+                                        ref={customerSearchRef}
+                                        value={customerSearch}
+                                        onFocus={() => setIsCustDropdownOpen(true)}
+                                        onClick={() => setIsCustDropdownOpen(true)}
+                                        onChange={e => {
+                                            setCustomerSearch(e.target.value)
+                                            setIsCustDropdownOpen(true)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                if (e.ctrlKey) {
+                                                    discountRef.current?.focus()
+                                                } else if (filteredCustomers.length > 0) {
+                                                    setSelectedCustomer(filteredCustomers[0])
+                                                    setCustomerSearch('')
+                                                    setIsCustDropdownOpen(false)
+                                                    discountRef.current?.focus()
+                                                } else if (customerSearch) {
+                                                    setNewCustName(customerSearch)
+                                                    setIsAddCustModalOpen(true)
+                                                } else {
+                                                    discountRef.current?.focus()
+                                                }
                                             }
-                                        }
-                                    }}
-                                    placeholder="Search buyer or add new..."
-                                    className="w-full pl-8 pr-4 h-10 border border-slate-200 rounded-xl text-[13px] outline-none focus:border-indigo-500 transition-all"
-                                />
-                                {customerSearch && (
-                                    <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto">
-                                        {filteredCustomers.length === 0 ? (
-                                            <button onClick={() => { setSelectedCustomer({ id: 'NEW', name: customerSearch, phone: '', old_balance: '0' }); setCustomerSearch('') }} className="w-full text-left p-3 text-[12px] text-indigo-600 font-bold hover:bg-slate-50 transition-colors">
-                                                + Add '{customerSearch}' as Walk-in
-                                            </button>
-                                        ) : (
-                                            <>
-                                                {filteredCustomers.slice(0, 5).map((c, idx) => (
-                                                    <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomerSearch(''); setSelectedCustIdx(0) }} className={`w-full text-left px-3 py-2 transition-colors border-b border-slate-50 ${selectedCustIdx === idx ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-slate-50'}`}>
-                                                        <p className="text-[13px] font-semibold text-slate-800">{c.name}</p>
-                                                        <p className="text-[11px] text-rose-500 font-medium">Due: ₹{parseFloat(c.old_balance).toFixed(2)}</p>
+                                        }}
+                                        placeholder="Search buyer by name or phone..."
+                                        className="w-full pl-8 pr-8 h-10 border border-slate-200 rounded-xl text-[13px] font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                    />
+                                    {customerSearch ? (
+                                        <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 text-slate-400 hover:text-slate-600">
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    ) : (
+                                        <ChevronDown className="absolute right-3 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                    )}
+                                </div>
+
+                                {isCustDropdownOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setIsCustDropdownOpen(false)} />
+                                        <div className="absolute top-full mt-1.5 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                                            {filteredCustomers.length === 0 ? (
+                                                <div className="p-3 text-center">
+                                                    <p className="text-[12px] text-slate-500 mb-2 font-medium">No buyers matching &quot;{customerSearch}&quot;</p>
+                                                    <button
+                                                        onClick={() => {
+                                                            setNewCustName(customerSearch)
+                                                            setIsCustDropdownOpen(false)
+                                                            setIsAddCustModalOpen(true)
+                                                        }}
+                                                        className="w-full py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-[12px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <UserPlus className="w-3.5 h-3.5" /> + Onboard &quot;{customerSearch}&quot; with B2B/Retail Tier
                                                     </button>
-                                                ))}
-                                                <button onClick={() => { setSelectedCustomer({ id: 'NEW', name: customerSearch, phone: '', old_balance: '0' }); setCustomerSearch('') }} className="w-full text-left p-2 text-[11px] text-indigo-500 font-bold hover:bg-slate-50 border-t border-slate-100">
-                                                    + Or Add '{customerSearch}' as Walk-in
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="p-1">
+                                                        {filteredCustomers.slice(0, 15).map((c, idx) => (
+                                                            <button
+                                                                key={c.id}
+                                                                onClick={() => {
+                                                                    setSelectedCustomer(c)
+                                                                    setCustomerSearch('')
+                                                                    setIsCustDropdownOpen(false)
+                                                                    setSelectedCustIdx(0)
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between ${selectedCustIdx === idx ? 'bg-indigo-50 text-indigo-900' : 'hover:bg-slate-50'
+                                                                    }`}
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[13px] font-bold text-slate-900">{c.name}</span>
+                                                                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase ${c.customer_type === 'WHOLESALE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                                                                            }`}>
+                                                                            {c.customer_type === 'WHOLESALE' ? '🏷️ B2B Wholesale' : 'Retail'}
+                                                                        </span>
+                                                                    </div>
+                                                                    {c.phone && <p className="text-[11px] text-slate-400 mt-0.5">📞 {c.phone}</p>}
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-[11px] text-rose-500 font-bold block font-mono">
+                                                                        ₹{parseFloat(c.old_balance || '0').toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="p-2 bg-slate-50 border-t border-slate-100">
+                                                        <button
+                                                            onClick={() => {
+                                                                setNewCustName(customerSearch)
+                                                                setIsCustDropdownOpen(false)
+                                                                setIsAddCustModalOpen(true)
+                                                            }}
+                                                            className="w-full py-1.5 text-center text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center justify-center gap-1"
+                                                        >
+                                                            <Plus className="w-3 h-3" /> + Add New Buyer with Custom Slabs
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}
@@ -565,27 +811,162 @@ export default function POSClient({ products, customers, shop }: { products: Pro
 
             {/* Bill Success Modal (simplified) */}
             <AnimatePresence>
-                {completedBill && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setCompletedBill(null)} />
-                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative z-10 bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center">
-                            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                            </div>
-                            <h2 className="text-xl font-bold text-slate-900">Sale Complete!</h2>
-                            <p className="text-slate-500 text-[14px] mt-1">Bill has been saved to database.</p>
-                            <div className="mt-6 bg-slate-50 rounded-2xl p-4 text-left space-y-2">
-                                <div className="flex justify-between text-[14px]"><span className="text-slate-500">Total</span><span className="font-bold">₹{completedBill.netTotal.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-[14px]"><span className="text-slate-500">Received</span><span className="font-bold text-emerald-600">₹{completedBill.paid.toFixed(2)}</span></div>
+                {
+                    completedBill && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setCompletedBill(null)} />
+                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative z-10 bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center">
+                                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                                </div>
+                                <h2 className="text-xl font-bold text-slate-900">Sale Complete!</h2>
+                                <p className="text-slate-500 text-[14px] mt-1">Bill has been saved to database.</p>
+                                <div className="mt-6 bg-slate-50 rounded-2xl p-4 text-left space-y-2">
+                                    <div className="flex justify-between text-[14px]"><span className="text-slate-500">Total</span><span className="font-bold">₹{completedBill.netTotal.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-[14px]"><span className="text-slate-500">Received</span><span className="font-bold text-emerald-600">₹{completedBill.paid.toFixed(2)}</span></div>
+                                </div>
+
+                                <div className="mt-6 flex gap-3">
+                                    <button onClick={() => window.print()} className={`flex-1 h-11 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${modalAction === 'print' ? 'bg-indigo-600 text-white ring-4 ring-indigo-600/30' : 'bg-slate-100 text-slate-500'}`}>
+                                        <Printer className="w-4 h-4" /> Print (Enter)
+                                    </button>
+                                    <button onClick={() => setCompletedBill(null)} className={`flex-1 h-11 font-semibold rounded-xl transition-all ${modalAction === 'new' ? 'bg-indigo-600 text-white ring-4 ring-indigo-600/30' : 'bg-slate-100 text-slate-500'}`}>New Bill (Enter)</button>
+                                </div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400 mt-4 tracking-widest">Use ← / → Arrows to select</p>
+                            </motion.div>
+                        </div>
+                    )
+                }
+            </AnimatePresence>
+
+            {/* Quick Add Buyer Modal */}
+            <AnimatePresence>
+                {isAddCustModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => !isSavingCustomer && setIsAddCustModalOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                            className="relative z-10 bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-slate-100"
+                        >
+                            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                                        <UserPlus className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-base text-slate-900">Onboard Buyer</h3>
+                                        <p className="text-xs text-slate-500">Configure party classification & pricing slabs</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => !isSavingCustomer && setIsAddCustModalOpen(false)}
+                                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
                             </div>
 
-                            <div className="mt-6 flex gap-3">
-                                <button onClick={() => window.print()} className={`flex-1 h-11 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${modalAction === 'print' ? 'bg-indigo-600 text-white ring-4 ring-indigo-600/30' : 'bg-slate-100 text-slate-500'}`}>
-                                    <Printer className="w-4 h-4" /> Print (Enter)
-                                </button>
-                                <button onClick={() => setCompletedBill(null)} className={`flex-1 h-11 font-semibold rounded-xl transition-all ${modalAction === 'new' ? 'bg-indigo-600 text-white ring-4 ring-indigo-600/30' : 'bg-slate-100 text-slate-500'}`}>New Bill (Enter)</button>
-                            </div>
-                            <p className="text-[10px] uppercase font-bold text-slate-400 mt-4 tracking-widest">Use ← / → Arrows to select</p>
+                            <form onSubmit={handleQuickAddCustomer} className="mt-4 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                        Buyer / Party Name *
+                                    </label>
+                                    <input
+                                        autoFocus
+                                        required
+                                        type="text"
+                                        value={newCustName}
+                                        onChange={e => setNewCustName(e.target.value)}
+                                        placeholder="e.g. Ramesh Kirana / Jaydeep Patel"
+                                        className="w-full h-11 px-3.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                        Mobile / WhatsApp Number
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={newCustPhone}
+                                        onChange={e => setNewCustPhone(e.target.value)}
+                                        placeholder="e.g. 9876543210"
+                                        className="w-full h-11 px-3.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                        Party Type / Pricing Tier *
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewCustType('RETAIL')}
+                                            className={`p-3 rounded-xl border text-left transition-all ${newCustType === 'RETAIL'
+                                                ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                                                }`}
+                                        >
+                                            <p className="font-bold text-xs text-slate-900">Standard Retail</p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5">Sells at standard retail price</p>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewCustType('WHOLESALE')}
+                                            className={`p-3 rounded-xl border text-left transition-all ${newCustType === 'WHOLESALE'
+                                                ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500/20'
+                                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                                                }`}
+                                        >
+                                            <p className="font-bold text-xs text-emerald-900 flex items-center gap-1">
+                                                🏷️ Wholesale B2B
+                                            </p>
+                                            <p className="text-[10px] text-emerald-700 mt-0.5">Auto-applies B2B wholesale rates</p>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                        Opening Udhaari / Due (₹)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={newCustBalance}
+                                        onChange={e => setNewCustBalance(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full h-11 px-3.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                </div>
+
+                                <div className="pt-3 flex gap-3">
+                                    <button
+                                        type="button"
+                                        disabled={isSavingCustomer}
+                                        onClick={() => setIsAddCustModalOpen(false)}
+                                        className="flex-1 h-11 font-bold text-xs uppercase tracking-wider text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingCustomer}
+                                        className="flex-1 h-11 font-bold text-xs uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                                    >
+                                        {isSavingCustomer ? 'Saving...' : 'Save & Select'}
+                                    </button>
+                                </div>
+                            </form>
                         </motion.div>
                     </div>
                 )}
