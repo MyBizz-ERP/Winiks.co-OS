@@ -132,6 +132,52 @@ This document tracks all features, technical architecture changes, dates of impl
 
 ---
 
+## [2026-10-14] - Phase 12: Sales POS Cumulative Udhaari Math & Accounts Payable Supplier Creation
+
+### 1. Cumulative Customer Udhaari, Total Payable & Change Math in Sales POS
+* **What Was Built:**
+  - Upgraded Sales POS checkout math in `src/app/erp/wholesale/pos/components/POSClient.tsx`:
+    - `totalPayable = Net Total (चालू बिल) + Old Udhaari (मागील बाकी)`
+    - `change = selectedCustomer ? Math.max(0, paid - totalPayable) : Math.max(0, paid - netTotal)`
+    - `newUdhaari = selectedCustomer ? Math.max(0, totalPayable - paid) : 0`
+  - Re-structured the Bill Summary card to present the full wholesale ledger:
+    - **Subtotal (एकूण):** Sum of items in cart.
+    - **Discount (सूट):** Applied invoice discount.
+    - **Current Bill (चालू बिल):** Net amount for current items.
+    - **Old Udhaari (मागील बाकी):** Previous uncollected credit balance owed by the selected buyer.
+    - **Total Payable (एकूण देय):** Combined total required to completely clear their account.
+  - Revamped Amount Received & Live Balance HUD:
+    - Displays `Prev: ₹X → New Balance: ₹Y` dynamically as amount received is typed.
+    - If customer pays a lump sum towards old udhaari + current bill (e.g., Priya Desai paying ₹5,000 against ₹10,968.75 old due + ₹864 bill), the system correctly subtracts the payment from total debt showing `Remaining Udhaari: ₹6,832.75` rather than misleadingly suggesting ₹4,136 change.
+    - Change is now ONLY shown if the customer pays more than `Total Payable` (Current Bill + Old Udhaari).
+  - Synchronized `src/app/api/erp/pos/checkout/route.ts` with `Math.max(0, prevBal + unpaid)` to prevent negative customer udhaari balances.
+* **Business Rationale (Why?):**
+  - Wholesale market buyers routinely make partial bulk payments towards their running ledger. Treating payments solely against the current invoice resulted in cashiers handing back money as "Change" when the buyer actually still owed substantial old debt.
+
+---
+
+### 2. Accounts Payable + New Supplier Modal & Supplier Directory Navigation
+* **What Was Built:**
+  - Added a dedicated **"+ New Supplier (नवीन पुरवठादार)"** action button and modal directly inside `src/app/erp/wholesale/ap/components/ClientAccountsPayable.tsx`.
+  - The modal enables store owners to register:
+    - **Supplier Name (नाव)**
+    - **Contact Phone (फोन)**
+    - **Opening Due Balance (मागील बाकी - ₹)** to log legacy vendor debts immediately.
+  - Added direct **"Supplier Directory"** navigation link in Accounts Payable header and in the main navigation sidebar (`src/components/app-sidebar.tsx`).
+  - Added multi-route revalidation (`/erp/wholesale/ap`, `/erp/wholesale/purchase`, `/erp/wholesale/vault`) inside `src/app/erp/wholesale/suppliers/actions.ts` when suppliers are created or updated.
+* **Business Rationale (Why?):**
+  - Store owners managing payables needed to create suppliers with starting debts directly from the Accounts Payable dashboard without jumping through multiple hidden screens.
+
+---
+
+### 3. Thermal Receipt Math Alignment Across Sales & Purchases
+* **What Was Built:**
+  - In `src/app/erp/wholesale/components/SharedThermalReceipt.tsx`, updated the sales receipt math block to `netPayable - amountPaid`, eliminating double-counted old dues and unifying sales and purchase thermal receipts.
+* **Business Rationale (Why?):**
+  - Ensures printed and PDF thermal receipts match counter screen math down to the exact rupee.
+
+---
+
 ## Core System Architecture Reference
 
 | Module | Route / File | Core Responsibility |

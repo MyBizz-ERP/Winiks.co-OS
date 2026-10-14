@@ -63,6 +63,11 @@ const wholesaleRoutes = [
         icon: FileSpreadsheet,
     },
     {
+        title: "Suppliers Directory",
+        url: "/erp/wholesale/suppliers",
+        icon: Truck,
+    },
+    {
         title: "Platform Settings",
         url: "/erp/wholesale/settings",
         icon: Settings,

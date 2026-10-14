@@ -191,10 +191,11 @@ export default function POSClient({ products, customers, shop }: { products: Pro
 
     const subtotal = cart.reduce((s, i) => s + i.qty * i.rate, 0)
     const netTotal = subtotal - discount
-    const prevUdhaari = selectedCustomer ? parseFloat(selectedCustomer.old_balance) : 0
+    const prevUdhaari = selectedCustomer ? parseFloat(selectedCustomer.old_balance || '0') : 0
+    const totalPayable = netTotal + prevUdhaari
     const paid = parseFloat(amountReceived) || 0
-    const change = paid - netTotal
-    const newUdhaari = prevUdhaari + (netTotal - paid > 0 ? netTotal - paid : 0)
+    const change = selectedCustomer ? Math.max(0, paid - totalPayable) : Math.max(0, paid - netTotal)
+    const newUdhaari = selectedCustomer ? Math.max(0, totalPayable - paid) : 0
 
     function prepareItem(product: Product) {
         setCart(prev => {
@@ -314,6 +315,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
             subtotal: currentSubtotal,
             discount: currentDiscount,
             netTotal: currentNetTotal,
+            totalPayable: currentNetTotal + (currentCust ? parseFloat(currentCust.old_balance || '0') : 0),
             paid: currentPaid,
             newUdhaari: currentNewUdhaari,
             paymentMethod: currentPaymentMethod
@@ -747,10 +749,10 @@ export default function POSClient({ products, customers, shop }: { products: Pro
 
                     <div className="space-y-2.5 text-[13px]">
                         <div className="flex justify-between font-medium text-slate-600">
-                            <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
+                            <span>Subtotal (एकूण)</span><span>₹{subtotal.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center font-medium text-slate-600">
-                            <span>Discount</span>
+                            <span>Discount (सूट)</span>
                             <div className="relative w-24">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
                                 <input
@@ -770,19 +772,30 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                 />
                             </div>
                         </div>
-                        <div className="flex justify-between font-black text-slate-900 text-[16px] border-t border-dashed border-slate-200 pt-2.5">
-                            <span>Net Total</span><span className="text-indigo-700">₹{netTotal.toFixed(2)}</span>
+                        <div className="flex justify-between font-bold text-slate-700 text-[13px] border-t border-dashed border-slate-200 pt-2.5">
+                            <span>Current Bill (चालू बिल)</span><span className="text-slate-900 font-extrabold">₹{netTotal.toFixed(2)}</span>
+                        </div>
+                        {selectedCustomer && prevUdhaari > 0 && (
+                            <div className="flex justify-between font-bold text-slate-700 text-[13px]">
+                                <span>Old Udhaari (मागील बाकी)</span>
+                                <span className="text-rose-600 font-extrabold">₹{prevUdhaari.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between font-black text-slate-900 text-[16px] border-t border-slate-200 pt-2.5">
+                            <span>Total Payable (एकूण देय)</span><span className="text-indigo-700 font-black">₹{totalPayable.toFixed(2)}</span>
                         </div>
                     </div>
 
-                    {selectedCustomer && prevUdhaari > 0 && (
-                        <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-[12px] font-medium text-rose-700">
-                            Prev Udhaari: ₹{prevUdhaari.toFixed(2)} → New balance: ₹{newUdhaari.toFixed(2)}
+                    {selectedCustomer && (
+                        <div className={`p-3 rounded-xl border text-[12px] font-semibold flex justify-between items-center ${newUdhaari > 0 ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>
+                            <span>Prev Udhaari: ₹{prevUdhaari.toFixed(2)}</span>
+                            <span>→</span>
+                            <span className="font-black">New Balance: ₹{newUdhaari.toFixed(2)}</span>
                         </div>
                     )}
 
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Amount Received</label>
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Amount Received (मिळालेली रक्कम)</label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">₹</span>
                             <input
@@ -802,9 +815,22 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                             />
                         </div>
                         {paid > 0 && (
-                            <p className={`text-[13px] font-bold ${change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {change >= 0 ? `Change: ₹${change.toFixed(2)}` : `Udhaari: ₹${Math.abs(change).toFixed(2)}`}
-                            </p>
+                            <div className="flex justify-between items-center text-[13px] font-bold pt-1">
+                                {selectedCustomer ? (
+                                    <>
+                                        <span className={newUdhaari > 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                                            {newUdhaari > 0 ? `Remaining Udhaari: ₹${newUdhaari.toFixed(2)}` : '✓ Cleared! (हिशोब पूर्ण)'}
+                                        </span>
+                                        {change > 0 && (
+                                            <span className="text-emerald-600 font-black">Change: ₹{change.toFixed(2)}</span>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className={change >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                        {change >= 0 ? `Change: ₹${change.toFixed(2)}` : `Udhaari: ₹${Math.abs(change).toFixed(2)}`}
+                                    </p>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -1021,10 +1047,10 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                     cart={completedBill?.cart || cart}
                     subtotal={completedBill?.subtotal || subtotal}
                     discount={discount}
-                    oldDue={completedBill ? (parseFloat(completedBill.customer?.old_balance) || 0) : prevUdhaari}
-                    netPayable={completedBill?.netTotal || (netTotal + prevUdhaari)}
+                    oldDue={completedBill ? (parseFloat(completedBill.customer?.old_balance || '0')) : prevUdhaari}
+                    netPayable={completedBill ? (completedBill.netTotal + (parseFloat(completedBill.customer?.old_balance || '0'))) : totalPayable}
                     amountPaid={completedBill?.paid || paid}
-                    newDueAdded={completedBill?.newUdhaari || newUdhaari}
+                    newDueAdded={completedBill?.newUdhaari ?? newUdhaari}
                     paymentMethod={completedBill?.paymentMethod || paymentMethod}
                 />
             </div>
@@ -1049,7 +1075,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                     subtotal={subtotal}
                                     discount={discount}
                                     oldDue={prevUdhaari}
-                                    netPayable={netTotal + prevUdhaari}
+                                    netPayable={totalPayable}
                                     amountPaid={paid}
                                     newDueAdded={newUdhaari}
                                     paymentMethod={completedBill?.paymentMethod || paymentMethod}

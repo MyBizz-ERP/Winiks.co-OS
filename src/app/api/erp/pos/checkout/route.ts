@@ -98,9 +98,9 @@ export async function POST(req: NextRequest) {
             const [cust] = await db.select({ old_balance: customers.old_balance }).from(customers)
                 .where(and(eq(customers.id, finalCustomerId), eq(customers.shop_id, shop.id)))
             if (cust) {
-                const prevBal = parseFloat(cust.old_balance)
+                const prevBal = parseFloat(cust.old_balance || '0')
                 const unpaid = netTotal - amountPaid
-                const newBalance = prevBal + unpaid
+                const newBalance = Math.max(0, prevBal + unpaid)
                 await db.update(customers).set({ old_balance: newBalance.toString() })
                     .where(eq(customers.id, finalCustomerId))
             }

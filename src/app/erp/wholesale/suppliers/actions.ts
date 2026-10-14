@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { db } from '@/db'
 import { shops, suppliers } from '@/db/schema'
@@ -38,6 +38,9 @@ export async function createSupplier(formData: FormData) {
         throw new Error("Failed to materialize supplier payload.")
     }
     revalidatePath('/erp/wholesale/suppliers')
+    revalidatePath('/erp/wholesale/ap')
+    revalidatePath('/erp/wholesale/purchase')
+    revalidatePath('/erp/wholesale/vault')
 }
 
 export async function deleteSupplier(supplierId: string) {
@@ -54,6 +57,9 @@ export async function deleteSupplier(supplierId: string) {
         throw new Error("Failed to delete supplier payload.")
     }
     revalidatePath('/erp/wholesale/suppliers')
+    revalidatePath('/erp/wholesale/ap')
+    revalidatePath('/erp/wholesale/purchase')
+    revalidatePath('/erp/wholesale/vault')
 }
 
 export async function updateSupplier(supplierId: string, formData: FormData) {

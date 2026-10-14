@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { Package, Search, Download, Printer, Edit, X, Receipt, Eye } from 'lucide-react'
+import { Package, Search, Download, Printer, Edit, X, Receipt, Eye, UserPlus, Truck } from 'lucide-react'
 import SharedThermalReceipt from '../../components/SharedThermalReceipt'
 import { getPurchaseDetails, updatePurchaseBill, updateSupplierProfile } from '../actions'
+import { createSupplier } from '../../suppliers/actions'
 
 export default function ClientAccountsPayable({ data, shop }: { data: any[], shop: any }) {
     const [search, setSearch] = useState('')
@@ -71,6 +72,38 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
     const [supplierName, setSupplierName] = useState('')
     const [supplierPhone, setSupplierPhone] = useState('')
     const [supplierBalance, setSupplierBalance] = useState('')
+
+    const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false)
+    const [newSuppName, setNewSuppName] = useState('')
+    const [newSuppPhone, setNewSuppPhone] = useState('')
+    const [newSuppBalance, setNewSuppBalance] = useState('')
+    const [isCreatingSupplier, setIsCreatingSupplier] = useState(false)
+
+    const handleCreateSupplier = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newSuppName.trim()) {
+            alert('Supplier name is required')
+            return
+        }
+        setIsCreatingSupplier(true)
+        try {
+            const formData = new FormData()
+            formData.set('name', newSuppName.trim())
+            if (newSuppPhone.trim()) formData.set('phone', newSuppPhone.trim())
+            formData.set('current_balance', newSuppBalance.trim() || '0')
+            await createSupplier(formData)
+            setIsAddSupplierOpen(false)
+            setNewSuppName('')
+            setNewSuppPhone('')
+            setNewSuppBalance('')
+            alert('Supplier created successfully.')
+            window.location.reload()
+        } catch (err: any) {
+            alert(err.message || 'Failed to create supplier')
+        } finally {
+            setIsCreatingSupplier(false)
+        }
+    }
 
     const [printData, setPrintData] = useState<any>(null)
     const [isFetchingPrint, setIsFetchingPrint] = useState(false)
@@ -230,7 +263,19 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
                     </h1>
                     <p className="text-sm text-slate-500 mt-1 font-medium">Historical audit of all Kharedi Purchase Bills indicating core cash outflows.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                        onClick={() => setIsAddSupplierOpen(true)}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0"
+                    >
+                        <UserPlus className="w-4 h-4" /> + New Supplier
+                    </button>
+                    <a
+                        href="/erp/wholesale/suppliers"
+                        className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all border border-slate-200 active:scale-95 whitespace-nowrap shrink-0"
+                    >
+                        <Truck className="w-4 h-4 text-slate-500" /> Supplier Directory
+                    </a>
                     <button
                         onClick={exportCSV}
                         className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0"
@@ -589,6 +634,79 @@ export default function ClientAccountsPayable({ data, shop }: { data: any[], sho
                             oldDue={printData.supplierOldDue - (parseFloat(printData.bill.total_amount) - parseFloat(printData.bill.amount_paid))}
                             timestamp={printData.bill.created_at}
                         />
+                    </div>
+                </div>
+            )}
+            {/* Create Supplier Modal */}
+            {isAddSupplierOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
+                            <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                                <UserPlus className="w-5 h-5 text-rose-500" /> Add New Supplier (नवीन पुरवठादार)
+                            </h3>
+                            <button onClick={() => setIsAddSupplierOpen(false)} className="text-slate-400 hover:text-slate-700">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateSupplier} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                    Supplier Name (पुरवठादाराचे नाव) *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newSuppName}
+                                    onChange={(e) => setNewSuppName(e.target.value)}
+                                    placeholder="e.g. Balaji Wafers / Shakti Traders"
+                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                    Phone Number (फोन नंबर)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newSuppPhone}
+                                    onChange={(e) => setNewSuppPhone(e.target.value)}
+                                    placeholder="e.g. 9876543210"
+                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                                    Opening Due Balance (मागील बाकी - ₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={newSuppBalance}
+                                    onChange={(e) => setNewSuppBalance(e.target.value)}
+                                    placeholder="0.00"
+                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1">If you have existing debt with this supplier, enter it here.</p>
+                            </div>
+                            <div className="flex gap-3 pt-3">
+                                <button
+                                    type="button"
+                                    disabled={isCreatingSupplier}
+                                    onClick={() => setIsAddSupplierOpen(false)}
+                                    className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isCreatingSupplier}
+                                    className="flex-1 py-3 text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-lg shadow-rose-600/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    {isCreatingSupplier ? 'Saving...' : 'Create Supplier'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

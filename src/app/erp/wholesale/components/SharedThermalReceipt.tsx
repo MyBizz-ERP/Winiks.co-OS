@@ -194,10 +194,10 @@ export default function SharedThermalReceipt({
                             <span>₹{amountPaid.toFixed(0)} {paymentMethod ? `(${paymentMethod})` : ''}</span>
                         </div>
 
-                        {(newDueAdded !== 0 || oldDue > 0) && (
-                            <div className={`flex justify-between font-bold mt-1 ${oldDue + newDueAdded < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                <span>{oldDue + newDueAdded < 0 ? (language === 'MAR' ? 'आगाऊ जमा (Advance)' : 'Advance Paid') : (language === 'MAR' ? 'नवीन बाकी (Total Due)' : 'Total Due')}:</span>
-                                <span>₹{Math.abs(oldDue + newDueAdded).toFixed(0)}</span>
+                        {(netPayable - amountPaid !== 0 || oldDue > 0) && (
+                            <div className={`flex justify-between font-bold mt-1 ${netPayable - amountPaid < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                <span>{netPayable - amountPaid < 0 ? (language === 'MAR' ? 'आगाऊ जमा (Advance)' : 'Advance Paid') : (language === 'MAR' ? 'नवीन बाकी (Total Due)' : 'Total Due')}:</span>
+                                <span>₹{Math.abs(netPayable - amountPaid).toFixed(0)}</span>
                             </div>
                         )}
                     </>
