@@ -33,6 +33,11 @@ const wholesaleRoutes = [
         icon: ArrowLeftRight,
     },
     {
+        title: "Kharedi History",
+        url: "/erp/wholesale/purchase/history",
+        icon: FileSpreadsheet,
+    },
+    {
         title: "Accounts Receivable",
         url: "/erp/wholesale/udhaari",
         icon: HandCoins,

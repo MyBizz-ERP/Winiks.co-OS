@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { Receipt, Download, Search, Printer, Edit, X, Eye } from 'lucide-react'
+import { Receipt, Download, Search, Printer, Edit, X, Eye, FileText } from 'lucide-react'
 import SharedThermalReceipt from '../../components/SharedThermalReceipt'
 import { getInvoiceDetails, updateSalesInvoice, voidAndCloneSalesInvoice } from '../actions'
 import { useRouter } from 'next/navigation'
+import { exportSalesHistoryPDF } from '@/utils/historyPdfExport'
 
 export default function ClientSalesHistory({ data, shop }: { data: any[], shop: any }) {
     const [search, setSearch] = useState('')
@@ -225,6 +226,16 @@ export default function ClientSalesHistory({ data, shop }: { data: any[], shop: 
                     <p className="text-sm text-slate-500 mt-1 font-medium">Historical audit of all generated retail invoices.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => {
+                            const onlyBills = dateSegmented.filter(b => b.type !== 'PAYMENT')
+                            exportSalesHistoryPDF(onlyBills, shop, dateFilter)
+                        }}
+                        disabled={dateSegmented.length === 0}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0 disabled:opacity-50"
+                    >
+                        <FileText className="w-4 h-4 text-white" /> Export PDF Statement (A4)
+                    </button>
                     <button
                         onClick={exportCSV}
                         className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0"

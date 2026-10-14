@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { invoices, invoiceItems, customerPayments, shops, customers } from '@/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { invoices, invoiceItems, customerPayments, shops, customers, products } from '@/db/schema'
+import { eq, desc, inArray } from 'drizzle-orm'
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import ClientSalesHistory from './components/ClientSalesHistory'
@@ -32,7 +32,36 @@ export default async function SalesHistoryPage() {
         .leftJoin(customers, eq(invoices.customer_id, customers.id))
         .where(eq(invoices.shop_id, shop.id))
         .orderBy(desc(invoices.created_at))
-        .limit(100)
+        .limit(200)
+
+    const invoiceIds = result.map(i => i.id)
+
+    const rawItems = invoiceIds.length > 0 ? await db.select({
+        id: invoiceItems.id,
+        invoice_id: invoiceItems.invoice_id,
+        product_id: invoiceItems.product_id,
+        product_name: products.name,
+        quantity: invoiceItems.quantity,
+        rate: invoiceItems.rate,
+        total: invoiceItems.total,
+    }).from(invoiceItems)
+        .leftJoin(products, eq(invoiceItems.product_id, products.id))
+        .where(inArray(invoiceItems.invoice_id, invoiceIds))
+        : []
+
+    const itemsByInvoice = new Map<string, any[]>()
+    for (const item of rawItems) {
+        const list = itemsByInvoice.get(item.invoice_id) || []
+        list.push({
+            id: item.id,
+            product_id: item.product_id,
+            product_name: item.product_name || 'Item',
+            quantity: item.quantity,
+            rate: parseFloat(item.rate as any || '0'),
+            total: parseFloat(item.total as any || '0')
+        })
+        itemsByInvoice.set(item.invoice_id, list)
+    }
 
     const payments = await db.select({
         id: customerPayments.id,
@@ -58,7 +87,8 @@ export default async function SalesHistoryPage() {
         amount_paid: parseFloat(i.amount_paid as any),
         customer_id: i.customer_id,
         customer_balance: parseFloat(i.customer_balance as any || '0'),
-        created_at: i.created_at.toISOString()
+        created_at: i.created_at.toISOString(),
+        items: itemsByInvoice.get(i.id) || []
     }))
 
     const serializedPayments = payments.map(i => ({

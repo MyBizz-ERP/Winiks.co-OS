@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -200,23 +200,27 @@ export default function POSClient({ products, customers, shop }: { products: Pro
         setCart(prev => {
             const exists = prev.find(i => i.id === product.id)
             if (exists) {
-                const newQty = exists.qty + 1
+                const newQty = (exists.qty || 0) + 1
                 const computed = exists.isManualPrice ? { rate: exists.rate, tierReason: exists.tierReason } : computeSmartRate(exists, newQty, selectedCustomer, isWholesaleMode)
                 return prev.map(i => i.id === product.id ? { ...i, qty: newQty, rate: computed.rate, tierReason: computed.tierReason } : i)
             }
             const computed = computeSmartRate(product, 1, selectedCustomer, isWholesaleMode)
-            return [...prev, { ...product, qty: 1, rate: computed.rate, tierReason: computed.tierReason, isManualPrice: false }]
+            return [...prev, { ...product, qty: 0, rate: computed.rate, tierReason: computed.tierReason, isManualPrice: false }]
         })
         setSearch('')
         setSelectedProdIdx(0)
-        setTimeout(() => document.getElementById(`qty-input-${product.id}`)?.focus(), 50)
+        setTimeout(() => {
+            const el = document.getElementById(`qty-input-${product.id}`) as HTMLInputElement | null
+            el?.focus()
+            el?.select()
+        }, 50)
     }
 
     function setQty(id: string, qty: number) {
-        const safeQty = Math.max(1, qty)
+        const safeQty = Math.max(0, qty)
         setCart(prev => prev.map(i => {
             if (i.id !== id) return i
-            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty, selectedCustomer, isWholesaleMode)
+            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty || 1, selectedCustomer, isWholesaleMode)
             return { ...i, qty: safeQty, rate: computed.rate, tierReason: computed.tierReason }
         }))
     }
@@ -224,8 +228,8 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     function updateQty(id: string, delta: number) {
         setCart(prev => prev.map(i => {
             if (i.id !== id) return i
-            const safeQty = Math.max(1, i.qty + delta)
-            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty, selectedCustomer, isWholesaleMode)
+            const safeQty = Math.max(0, (i.qty || 0) + delta)
+            const computed = i.isManualPrice ? { rate: i.rate, tierReason: i.tierReason } : computeSmartRate(i, safeQty || 1, selectedCustomer, isWholesaleMode)
             return { ...i, qty: safeQty, rate: computed.rate, tierReason: computed.tierReason }
         }).filter(i => i.qty > 0))
     }
@@ -266,6 +270,9 @@ export default function POSClient({ products, customers, shop }: { products: Pro
     async function handleCheckout() {
         if (isSubmitting) return
         if (cart.length === 0) return alert('Cart is empty.')
+        if (cart.some(item => (item.qty || 0) <= 0)) {
+            return alert('Quantity must be greater than 0 for all items in the cart.')
+        }
         const payload = {
             cart,
             customerId: selectedCustomer?.id || null,
@@ -545,7 +552,7 @@ export default function POSClient({ products, customers, shop }: { products: Pro
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-1.5 justify-center">
                                                     <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"><Minus className="w-4 h-4" /></button>
-                                                    <input id={`qty-input-${item.id}`} type="number" value={item.qty} onFocus={e => e.target.select()} onChange={e => setQty(item.id, parseFloat(e.target.value) || 1)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById(`rate-input-${item.id}`)?.focus() } }} className="text-[16px] font-black w-24 text-center border-2 border-slate-200 rounded-lg outline-none focus:border-indigo-500 py-1 bg-white shadow-inner" />
+                                                    <input id={`qty-input-${item.id}`} type="number" value={item.qty === 0 ? '' : item.qty} placeholder="0" onFocus={e => e.target.select()} onChange={e => { const v = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0; setQty(item.id, v) }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById(`rate-input-${item.id}`)?.focus() } }} className="text-[16px] font-black w-24 text-center border-2 border-slate-200 rounded-lg outline-none focus:border-indigo-500 py-1 bg-white shadow-inner" />
                                                     <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"><Plus className="w-4 h-4" /></button>
                                                 </div>
                                             </td>

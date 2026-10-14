@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Save, UploadCloud, Download, Lock, Key, UserCircle, Phone } from 'lucide-react'
+import { Save, UploadCloud, Download, Lock, Key, UserCircle, Phone, AlertTriangle, RotateCcw, FileCheck, CheckCircle2, FileText, X } from 'lucide-react'
 import Papa from 'papaparse'
-import { updateReceiptSettings, processLegacyCsv, updateVaultPin, updateLoginPassword, updateLoginId } from '../actions'
+import { updateReceiptSettings, processLegacyCsv, updateVaultPin, updateLoginPassword, updateLoginId, resetPeriod, getPeriodBackupData } from '../actions'
+import { exportSalesHistoryPDF, exportKharediHistoryPDF } from '@/utils/historyPdfExport'
 import OwnerSecurityGate from '@/components/OwnerSecurityGate'
 
 export default function SettingsClient({ shop }: { shop: any }) {
@@ -22,6 +23,50 @@ export default function SettingsClient({ shop }: { shop: any }) {
     const [isSavingAppPassword, setIsSavingAppPassword] = useState(false)
     const [appId, setAppId] = useState('')
     const [isSavingAppId, setIsSavingAppId] = useState(false)
+
+    // Period Reset / Fresh Start State
+    const [resetPin, setResetPin] = useState('')
+    const [isBackingUp, setIsBackingUp] = useState(false)
+    const [backupDownloaded, setBackupDownloaded] = useState(false)
+    const [isResetting, setIsResetting] = useState(false)
+    const [showConfirmModal, setShowConfirmModal] = useState(false)
+
+    const handleDownloadFullBackup = async () => {
+        setIsBackingUp(true)
+        try {
+            const data = await getPeriodBackupData()
+            if (data.salesBills.length > 0) {
+                exportSalesHistoryPDF(data.salesBills, data.shop, 'PRE-RESET-BACKUP')
+            }
+            if (data.purchaseBills.length > 0) {
+                exportKharediHistoryPDF(data.purchaseBills, data.shop, 'PRE-RESET-BACKUP')
+            }
+            setBackupDownloaded(true)
+            alert(`Full backup generated! Exported ${data.salesBills.length} sales bills and ${data.purchaseBills.length} purchase bills. Check your Downloads folder.`)
+        } catch (e: any) {
+            console.error(e)
+            alert(e.message || 'Backup generation failed.')
+        } finally {
+            setIsBackingUp(false)
+        }
+    }
+
+    const handleExecuteReset = async () => {
+        if (!resetPin || resetPin.trim().length !== 4) {
+            return alert('Please enter your 4-digit Owner PIN to authorize the reset.')
+        }
+        setIsResetting(true)
+        try {
+            const res = await resetPeriod(resetPin.trim())
+            setShowConfirmModal(false)
+            alert(res.message)
+            window.location.reload()
+        } catch (e: any) {
+            alert(e.message || 'Period reset authorization failed.')
+        } finally {
+            setIsResetting(false)
+        }
+    }
 
     const handleSaveMetadata = async () => {
         setIsSaving(true)
@@ -297,6 +342,145 @@ export default function SettingsClient({ shop }: { shop: any }) {
                         </div>
                     </div>
                 </Card>
+
+                {/* Period Reset / Fresh Start (Year-End Close) */}
+                <Card className="border-rose-200 overflow-hidden shadow-[0_4px_24px_-12px_rgba(244,63,94,0.15)] text-slate-800 bg-white">
+                    <div className="p-6 border-b border-rose-100 bg-rose-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse"></span>
+                                <h2 className="text-sm font-black text-rose-950 tracking-widest uppercase">Period Reset / Fresh Start</h2>
+                            </div>
+                            <p className="text-xs text-rose-700 mt-1 font-semibold">
+                                Complete period close: Wipe sales & purchase bills while strictly preserving inventory stock, customer Udhaari, and supplier AP.
+                            </p>
+                        </div>
+                        <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-rose-200/80 text-rose-800 border border-rose-300 w-fit">
+                            Owner PIN Protected
+                        </span>
+                    </div>
+
+                    <div className="p-6 md:p-8 space-y-6">
+                        {/* Scope comparison table */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div className="p-4 rounded-xl bg-rose-50/40 border border-rose-100">
+                                <p className="font-black text-rose-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 text-rose-600" /> What Gets Deleted:
+                                </p>
+                                <ul className="space-y-1 text-slate-600 list-disc list-inside">
+                                    <li>All retail & wholesale sales invoices and line items</li>
+                                    <li>All inward purchase (Kharedi) bills and line items</li>
+                                    <li>Vault transaction tallies (Revenue, COGS, Accrual Profit, Sales Cash)</li>
+                                </ul>
+                            </div>
+
+                            <div className="p-4 rounded-xl bg-emerald-50/40 border border-emerald-100">
+                                <p className="font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> What Is Preserved 100%:
+                                </p>
+                                <ul className="space-y-1 text-slate-600 list-disc list-inside">
+                                    <li>All product catalog items and current inventory stock levels</li>
+                                    <li>All customer profiles & pending Udhaari balances</li>
+                                    <li>All supplier profiles & pending Accounts Payable (AP)</li>
+                                    <li>Customer and supplier historical payment logs</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Step-by-Step Execution Chain */}
+                        <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-4">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">Safety Execution Steps</h3>
+                            
+                            {/* Step 1: Backup */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800">Step 1: Download Full Period Statement Backup</p>
+                                    <p className="text-[11px] text-slate-500">Exports multi-page A4 PDFs for both Sales History and Kharedi History before any deletion.</p>
+                                </div>
+                                <button
+                                    onClick={handleDownloadFullBackup}
+                                    disabled={isBackingUp}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${backupDownloaded ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                                >
+                                    {backupDownloaded ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Download className="w-4 h-4" />}
+                                    {isBackingUp ? 'Generating Backup...' : backupDownloaded ? 'Backup Downloaded ✓' : 'Download Backup (A4 PDFs)'}
+                                </button>
+                            </div>
+
+                            {/* Step 2: PIN Verification */}
+                            <div className="p-3 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800">Step 2: Enter Owner PIN</p>
+                                    <p className="text-[11px] text-slate-500">Enter your 4-digit Owner PIN to unlock the period reset sequence.</p>
+                                </div>
+                                <div className="w-full sm:w-48">
+                                    <input
+                                        type="password"
+                                        maxLength={4}
+                                        value={resetPin}
+                                        onChange={(e) => setResetPin(e.target.value)}
+                                        placeholder="••••"
+                                        className="w-full text-center tracking-[0.5em] font-mono text-lg font-black py-2 bg-slate-50 border border-slate-200 rounded-xl focus:border-rose-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Step 3: Execute Action */}
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={() => {
+                                        if (!resetPin || resetPin.trim().length !== 4) {
+                                            return alert('Please enter your 4-digit Owner PIN first.')
+                                        }
+                                        setShowConfirmModal(true)
+                                    }}
+                                    disabled={!resetPin || resetPin.trim().length !== 4 || isResetting}
+                                    className="px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-rose-600/20 disabled:opacity-50 transition-all"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                    {isResetting ? 'Processing Wipe...' : 'Execute Period Reset'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Confirm Dialog Modal */}
+                {showConfirmModal && (
+                    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                            <div className="flex items-center gap-3 text-rose-600">
+                                <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center">
+                                    <AlertTriangle className="w-5 h-5 text-rose-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-slate-900 text-base">Final Confirmation: Period Reset</h3>
+                                    <p className="text-xs text-rose-600 font-semibold">This action cannot be undone.</p>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                                Are you sure you want to permanently delete all <strong>Sales Invoices</strong> and <strong>Kharedi Bills</strong>? All inventory stock, customer Udhaari balances, and supplier AP will be safely kept.
+                            </p>
+
+                            <div className="flex items-center gap-3 pt-2">
+                                <button
+                                    onClick={() => setShowConfirmModal(false)}
+                                    className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleExecuteReset}
+                                    disabled={isResetting}
+                                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50"
+                                >
+                                    {isResetting ? 'Resetting...' : 'Yes, Wipe Period'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </OwnerSecurityGate>
     )
