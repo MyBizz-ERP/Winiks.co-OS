@@ -280,6 +280,30 @@ export async function getPeriodBackupData() {
         purchaseItemMap.set(item.purchase_bill_id, list)
     }
 
+    // Fetch persistent balance sheet snapshots
+    const customerList = await db.select({
+        id: customers.id,
+        name: customers.name,
+        phone: customers.phone,
+        old_balance: customers.old_balance,
+    }).from(customers).where(eq(customers.shop_id, shop.id))
+
+    const supplierList = await db.select({
+        id: suppliers.id,
+        name: suppliers.name,
+        phone: suppliers.phone,
+        current_balance: suppliers.current_balance,
+    }).from(suppliers).where(eq(suppliers.shop_id, shop.id))
+
+    const stockList = await db.select({
+        id: products.id,
+        name: products.name,
+        stock: products.stock,
+        min_wholesale_qty: products.min_wholesale_qty,
+        wholesale_rate: products.wholesale_rate,
+        buy_rate: products.buy_rate,
+    }).from(products).where(eq(products.shop_id, shop.id))
+
     return {
         shop: {
             name: shop.name,
@@ -307,6 +331,27 @@ export async function getPeriodBackupData() {
             total_amount: parseFloat(p.total_amount as any || '0'),
             amount_paid: parseFloat(p.amount_paid as any || '0'),
             items: purchaseItemMap.get(p.id) || []
+        })),
+        customers: customerList.map(c => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            old_balance: parseFloat(c.old_balance as any || '0')
+        })),
+        suppliers: supplierList.map(sp => ({
+            id: sp.id,
+            name: sp.name,
+            phone: sp.phone,
+            current_balance: parseFloat(sp.current_balance as any || '0')
+        })),
+        inventory: stockList.map(pr => ({
+            id: pr.id,
+            name: pr.name,
+            stock_qty: parseFloat(String(pr.stock || '0')),
+            min_wholesale_qty: parseFloat(String(pr.min_wholesale_qty || '0')),
+            wholesale_price: parseFloat(String(pr.wholesale_rate || '0')),
+            purchase_rate: parseFloat(String(pr.buy_rate || '0'))
         }))
     }
 }
+
