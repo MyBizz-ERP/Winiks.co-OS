@@ -87,6 +87,51 @@ This document tracks all features, technical architecture changes, dates of impl
 
 ---
 
+## [2026-10-14] - Phase 11: Kharedi Supplier Old Due Counting, Total Payable Math & New Vendor Opening Balance
+
+### 1. Cumulative Supplier Old Due & Total Payable Math in Kharedi Setup
+* **What Was Built:**
+  - Upgraded Kharedi Setup checkout math in `src/app/erp/wholesale/purchase/components/KharediClient.tsx`:
+    - `totalPayableWithDue = Purchase Bill (चालू बिल) + Old Due (मागील बाकी)`
+    - `finalSupplierDebt = totalPayableWithDue - parsedAmountPaid`
+    - `billDebtChange = totalAmount - parsedAmountPaid`
+  - Replaced the simple 2-line box with a complete 3-tier financial breakdown:
+    - **Purchase Bill (चालू बिल):** Total cost of current items inwarded.
+    - **Old Due (मागील बाकी):** Previous un-settled vendor debt dynamically pulled from selected supplier's active balance.
+    - **Total Payable (एकूण देय):** Combined total amount owed before this payment.
+  - Revamped the Debt Badge under Amount Paid to display:
+    - **Total Supplier Debt (एकूण बाकी):** Live net debt remaining after today's payment.
+    - Breakdown showing both `Bill Net (+/-)` and `Previous Due`.
+* **Business Rationale (Why?):**
+  - In Indian wholesale trade, store owners frequently pay suppliers a lump-sum amount (e.g. paying ₹21,000 when current purchase is ₹2,020 and old balance is ₹21,645).
+  - When the UI previously showed `Added to Supplier Debt: -₹18,980` instead of counting the ₹21,645 old due and showing the remaining ₹2,665 total debt, owners believed the ERP was discarding their old vendor balances.
+  - Displaying the full equation (`Bill + Old Due = Total Payable - Paid = Remaining Debt`) provides total transparency and avoids cash discrepancies.
+
+---
+
+### 2. Walk-in Vendor Opening Due Balance Setup
+* **What Was Built:**
+  - Added an inline Opening Due input (`मागील बाकी`) when creating a New Supplier in `KharediClient.tsx`.
+  - Updated the checkout API `src/app/api/erp/purchase/checkout/route.ts` to accept `openingBalance` and initialize `suppliers.current_balance` with this starting balance.
+* **Business Rationale (Why?):**
+  - When migrating to the ERP or purchasing from a new vendor who already has an outstanding ledger balance outside the system, the owner must be able to record this opening balance immediately without having to leave the purchase counter to visit Accounts Payable first.
+
+---
+
+### 3. Thermal Receipt Audit Breakdown for Purchase
+* **What Was Built:**
+  - Synchronized `src/app/erp/wholesale/components/SharedThermalReceipt.tsx` for purchase receipts to print the full accounting equation:
+    - `Subtotal (चालू बिल)`
+    - `Old Due (मागील बाकी)`
+    - `Net Payable (एकूण देय)`
+    - `Amount Paid (दिलेली रक्कम)` with payment method (CASH / ONLINE)
+    - `Total Due (एकूण बाकी)` or `Advance Paid (आगाऊ जमा)`
+  - Fixed supplier name passing so receipts and database records capture the actual selected vendor's name rather than defaulting to `Local Vendor`.
+* **Business Rationale (Why?):**
+  - Eliminates disputes between wholesale distributors and store owners by giving both parties a printed receipt proving exactly what was billed, what old dues existed, what was paid on the spot, and what remaining debt was booked.
+
+---
+
 ## Core System Architecture Reference
 
 | Module | Route / File | Core Responsibility |

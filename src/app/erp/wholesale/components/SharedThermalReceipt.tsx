@@ -203,15 +203,32 @@ export default function SharedThermalReceipt({
                     </>
                 ) : (
                     <>
-                        <div className="flex justify-between items-center text-lg font-black mt-1">
-                            <span>{t.netPayable}</span>
-                            <span>₹{subtotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                        <div className="flex justify-between text-slate-800">
+                            <span>{t.subtotal}:</span>
+                            <span className="font-bold">₹{subtotal.toFixed(0)}</span>
                         </div>
-                        {amountPaid > 0 && (
-                            <div className="flex justify-between text-[11px] font-bold mt-1 text-slate-600 border-t border-solid border-slate-300 pt-2 text-right w-full">
-                                <span className="w-full text-right">{t.amountPaid}: ₹{amountPaid.toFixed(2)}</span>
+
+                        {oldDue > 0 && (
+                            <div className="flex justify-between text-slate-600">
+                                <span>{t.oldDue}:</span>
+                                <span>₹{oldDue.toFixed(0)}</span>
                             </div>
                         )}
+
+                        <div className="flex justify-between text-base font-bold mt-2 pt-2 border-t border-slate-300">
+                            <span>{t.netPayable}:</span>
+                            <span>₹{netPayable.toFixed(0)}</span>
+                        </div>
+
+                        <div className="flex justify-between text-slate-800 pt-2">
+                            <span>{t.amountPaid}:</span>
+                            <span>₹{amountPaid.toFixed(0)} {paymentMethod ? `(${paymentMethod})` : ''}</span>
+                        </div>
+
+                        <div className={`flex justify-between font-bold mt-1 ${netPayable - amountPaid <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            <span>{language === 'MAR' ? 'नवीन बाकी (Total Due)' : 'Total Due'}:</span>
+                            <span>₹{Math.max(0, netPayable - amountPaid).toFixed(0)}</span>
+                        </div>
                     </>
                 )}
             </div>

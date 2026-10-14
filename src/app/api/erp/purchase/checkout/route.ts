@@ -14,7 +14,7 @@ export async function POST(req: Request) {
         }
 
         // Get payload
-        const { cart, supplierId, supplierName, billRef, totalAmount, amountPaid, paymentMethod } = await req.json()
+        const { cart, supplierId, supplierName, billRef, totalAmount, amountPaid, paymentMethod, openingBalance } = await req.json()
 
         if (!cart || cart.length === 0) {
             return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
@@ -36,12 +36,24 @@ export async function POST(req: Request) {
 
             // 1. Resolve Supplier
             let targetSupplierId = supplierId
+            let supplierCurrentBalance = 0
+
             if (supplierId === 'NEW' || !supplierId) {
+                const initBal = openingBalance ? Math.round(parseFloat(String(openingBalance))).toString() : '0'
                 const [newSupp] = await tx.insert(suppliers).values({
                     shop_id: shopId,
-                    name: supplierName || 'Local Vendor'
+                    name: supplierName || 'Local Vendor',
+                    current_balance: initBal
                 }).returning({ id: suppliers.id })
                 targetSupplierId = newSupp.id
+                supplierCurrentBalance = parseFloat(initBal) || 0
+            } else {
+                const existingSupplier = await tx.query.suppliers.findFirst({
+                    where: (s, { eq }) => eq(s.id, targetSupplierId)
+                })
+                if (existingSupplier) {
+                    supplierCurrentBalance = parseFloat(existingSupplier.current_balance || '0') || 0
+                }
             }
 
             // 2. Create Purchase Bill
@@ -104,18 +116,13 @@ export async function POST(req: Request) {
 
             // 4. Update Supplier Balance (Added/Subtracted Debt)
             const debtAdded = Math.round(totalAmount - amountPaid)
-            const existingSupplier = await tx.query.suppliers.findFirst({
-                where: (s, { eq }) => eq(s.id, targetSupplierId)
-            })
+            const finalSupplierBalance = Math.round(supplierCurrentBalance + debtAdded)
 
-            if (existingSupplier) {
-                const oldBalance = parseFloat(existingSupplier.current_balance) || 0
-                await tx.update(suppliers).set({
-                    current_balance: (oldBalance + debtAdded).toString()
-                }).where(eq(suppliers.id, targetSupplierId))
-            }
+            await tx.update(suppliers).set({
+                current_balance: finalSupplierBalance.toString()
+            }).where(eq(suppliers.id, targetSupplierId))
 
-            return { success: true, billId: newBill.id }
+            return { success: true, billId: newBill.id, purchase_no: newBill.purchase_no }
         })
 
         return NextResponse.json(result)

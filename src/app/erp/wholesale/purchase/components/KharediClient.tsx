@@ -336,11 +336,12 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
     // Cart Maths
     const totalAmount = cart.reduce((sum, item) => sum + item.total, 0)
 
-    const activeSupplierRef = initialSuppliers.find(s => s.id === supplierId)
-    const supplierDue = activeSupplierRef ? parseFloat(activeSupplierRef.current_balance || '0') : 0
+    const supplierDue = selectedSupplier ? parseFloat(selectedSupplier.current_balance || '0') : 0
+    const totalPayableWithDue = totalAmount + supplierDue
 
     const parsedAmountPaid = parseFloat(amountPaid) || 0
-    const addedSupplierDebt = totalAmount - parsedAmountPaid
+    const billDebtChange = totalAmount - parsedAmountPaid
+    const finalSupplierDebt = totalPayableWithDue - parsedAmountPaid
 
     const finalizeKharedi = async () => {
         if (isSubmitting) return
@@ -352,11 +353,12 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
         const payload = {
             cart,
             supplierId: supplierId === 'NEW' ? null : supplierId,
-            supplierName: supplierSearch,
+            supplierName: selectedSupplier?.name || supplierSearch || 'Local Vendor',
             billRef,
             totalAmount,
             amountPaid: parsedAmountPaid,
-            paymentMethod
+            paymentMethod,
+            openingBalance: selectedSupplier?.id === 'NEW' ? parseFloat(selectedSupplier.current_balance || '0') : 0
         }
 
         if (!navigator.onLine) {
@@ -364,7 +366,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
             pending.push(payload)
             localStorage.setItem('mybizz_offline_kharedi', JSON.stringify(pending))
             window.print()
-            setCart([]); setSupplierId(''); setSupplierSearch(''); setBillRef(''); setAmountPaid('')
+            setCart([]); setSupplierId(''); setSelectedSupplier(null); setSupplierSearch(''); setBillRef(''); setAmountPaid('')
             return
         }
 
@@ -390,6 +392,7 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                 window.print()
                 setCart([])
                 setSupplierId('')
+                setSelectedSupplier(null)
                 setSupplierSearch('')
                 setBillRef('')
                 setAmountPaid('')
@@ -692,21 +695,39 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                             </div>
 
                             {selectedSupplier ? (
-                                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                                    <div className="flex-1">
-                                        <p className="font-bold text-[14px] text-blue-900">{selectedSupplier.name}</p>
-                                        {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') > 0 && (
-                                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-100 text-rose-700 rounded-lg border border-rose-200">
-                                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                                <span className="text-[11px] font-black uppercase tracking-widest">Previous Due: ₹{parseFloat(selectedSupplier.current_balance || '0').toLocaleString('en-IN')}</span>
-                                            </div>
-                                        )}
-                                        {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') <= 0 && (
-                                            <p className="text-[12px] text-blue-600 font-medium">Debt: ₹0.00</p>
-                                        )}
-                                        {selectedSupplier.id === 'NEW' && <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mt-1">Walk-in Vendor Setup</p>}
+                                <div className="flex flex-col bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <p className="font-bold text-[14px] text-blue-900">{selectedSupplier.name}</p>
+                                            {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') > 0 && (
+                                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-100 text-rose-700 rounded-lg border border-rose-200">
+                                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                    <span className="text-[11px] font-black uppercase tracking-widest">Previous Due: ₹{parseFloat(selectedSupplier.current_balance || '0').toLocaleString('en-IN')}</span>
+                                                </div>
+                                            )}
+                                            {selectedSupplier.id !== 'NEW' && parseFloat(selectedSupplier.current_balance || '0') <= 0 && (
+                                                <p className="text-[12px] text-blue-600 font-medium mt-0.5">Debt: ₹0.00</p>
+                                            )}
+                                            {selectedSupplier.id === 'NEW' && <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mt-0.5">New Supplier Setup</p>}
+                                        </div>
+                                        <button onClick={() => { setSelectedSupplier(null); setSupplierId('') }} className="text-blue-400 hover:text-blue-700 p-1"><X className="w-4 h-4" /></button>
                                     </div>
-                                    <button onClick={() => { setSelectedSupplier(null); setSupplierId('') }} className="text-blue-400 hover:text-blue-700"><X className="w-4 h-4" /></button>
+
+                                    {selectedSupplier.id === 'NEW' && (
+                                        <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-3">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider shrink-0">Opening Due (मागील बाकी):</label>
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                                                <input
+                                                    type="number"
+                                                    value={selectedSupplier.current_balance || ''}
+                                                    onChange={(e) => setSelectedSupplier({ ...selectedSupplier, current_balance: e.target.value })}
+                                                    placeholder="0"
+                                                    className="w-full bg-white border border-blue-200 rounded-lg pl-6 pr-2 py-1 text-xs font-bold text-blue-900 focus:outline-none focus:ring-1 focus:ring-blue-500 text-right"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="relative z-50">
@@ -799,14 +820,18 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                         </div>
 
                         {/* Summary Block */}
-                        <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 mx-1">
-                            <div className="flex justify-between items-end border-b border-slate-200 pb-3 mb-3">
-                                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Purchase Bill</span>
-                                <span className="text-2xl font-black text-[#111827]">₹{totalAmount.toFixed(0)}</span>
+                        <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/70 mx-1 flex flex-col gap-2.5">
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="font-bold text-slate-500 uppercase tracking-wider">Purchase Bill (चालू बिल)</span>
+                                <span className="font-extrabold text-slate-800">₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between items-end">
-                                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Old Due</span>
-                                <span className="text-lg font-bold text-slate-700">₹{supplierDue.toFixed(0)}</span>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="font-bold text-slate-500 uppercase tracking-wider">Old Due (मागील बाकी)</span>
+                                <span className={`font-extrabold ${supplierDue > 0 ? 'text-rose-600' : 'text-slate-700'}`}>₹{supplierDue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2.5 border-t border-slate-200">
+                                <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Total Payable (एकूण देय)</span>
+                                <span className="text-xl font-black text-blue-600">₹{totalPayableWithDue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 
@@ -824,12 +849,19 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                         finalizeBtnRef.current?.focus()
                                     }
                                 }}
-                                className="w-full bg-white text-center text-[28px] font-black text-emerald-500/90 border border-slate-200 rounded-2xl px-4 py-4 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-emerald-500/40"
-                                placeholder="Pay ₹0"
+                                className="w-full bg-white text-center text-[28px] font-black text-emerald-600 border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-emerald-500/30"
+                                placeholder="₹0"
                             />
-                            <div className="flex justify-between items-center mt-3 mx-1">
-                                <span className="text-[10px] font-bold text-slate-500 tracking-wide">Added to Supplier Debt:</span>
-                                <span className="text-[12px] font-black text-orange-500">₹{addedSupplierDebt.toFixed(0)}</span>
+                            {/* Total Supplier Debt breakdown badge */}
+                            <div className={`mt-3 p-3 rounded-xl border flex flex-col gap-1 ${finalSupplierDebt > 0 ? 'bg-amber-50/80 border-amber-200 text-amber-900' : 'bg-emerald-50/80 border-emerald-200 text-emerald-900'}`}>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[11px] font-extrabold uppercase tracking-wider">Total Supplier Debt (एकूण बाकी):</span>
+                                    <span className="text-sm font-black">₹{finalSupplierDebt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] opacity-75 font-semibold">
+                                    <span>Bill Net: {billDebtChange >= 0 ? `+₹${billDebtChange.toFixed(0)}` : `-₹${Math.abs(billDebtChange).toFixed(0)}`}</span>
+                                    <span>Previous: ₹{supplierDue.toFixed(0)}</span>
+                                </div>
                             </div>
                         </div>
 
@@ -872,13 +904,13 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                     language={receiptLang}
                     shopInfo={shopInfo || { name: 'YOUR SHOP NAME' }}
                     billRef={billRef}
-                    customerOrSupplierName={supplierSearch || 'Local Vendor'}
+                    customerOrSupplierName={selectedSupplier?.name || supplierSearch || 'Local Vendor'}
                     cart={cart}
                     subtotal={totalAmount}
                     oldDue={supplierDue}
-                    netPayable={totalAmount}
+                    netPayable={totalPayableWithDue}
                     amountPaid={parsedAmountPaid}
-                    newDueAdded={addedSupplierDebt}
+                    newDueAdded={finalSupplierDebt}
                     paymentMethod={paymentMethod}
                 />
             </div>
@@ -898,13 +930,13 @@ export default function KharediClient({ initialProducts, initialSuppliers, shopI
                                     language={receiptLang}
                                     shopInfo={shopInfo || { name: 'YOUR SHOP NAME' }}
                                     billRef={billRef}
-                                    customerOrSupplierName={supplierSearch || 'Local Vendor'}
+                                    customerOrSupplierName={selectedSupplier?.name || supplierSearch || 'Local Vendor'}
                                     cart={cart}
                                     subtotal={totalAmount}
                                     oldDue={supplierDue}
-                                    netPayable={totalAmount}
+                                    netPayable={totalPayableWithDue}
                                     amountPaid={parsedAmountPaid}
-                                    newDueAdded={addedSupplierDebt}
+                                    newDueAdded={finalSupplierDebt}
                                     paymentMethod={paymentMethod}
                                 />
                             </div>
