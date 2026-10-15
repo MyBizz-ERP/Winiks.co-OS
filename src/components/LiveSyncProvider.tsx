@@ -1,21 +1,28 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
 export default function LiveSyncProvider({ shopId }: { shopId: string }) {
     const router = useRouter()
+    const pathname = usePathname()
     const supabase = createClient()
     const lastSyncRef = useRef<number>(0)
+    const lastFocusSyncRef = useRef<number>(0)
 
     useEffect(() => {
         if (!shopId) return
 
-        // Throttle refreshes to at most once per 600ms to avoid re-render thrashing
-        const triggerSync = () => {
+        // Controlled throttle for server-rendered page refreshes (at most once every 2 seconds)
+        const triggerSync = (force = false) => {
+            // Avoid disruptive server re-renders while cashier is actively on POS checkout
+            if (!force && pathname === '/erp/wholesale/pos') {
+                return
+            }
+
             const now = Date.now()
-            if (now - lastSyncRef.current > 600) {
+            if (now - lastSyncRef.current > 2000) {
                 lastSyncRef.current = now
                 router.refresh()
             }
@@ -26,7 +33,7 @@ export default function LiveSyncProvider({ shopId }: { shopId: string }) {
         if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
             localBc = new BroadcastChannel(`erp_sync_${shopId}`)
             localBc.onmessage = () => {
-                triggerSync()
+                triggerSync(false)
             }
         }
 
@@ -35,47 +42,35 @@ export default function LiveSyncProvider({ shopId }: { shopId: string }) {
 
         channel
             .on('broadcast', { event: 'db_mutation' }, () => {
-                triggerSync()
+                triggerSync(false)
             })
             .on('postgres_changes', { event: '*', schema: 'wholesale', filter: `shop_id=eq.${shopId}` }, () => {
-                triggerSync()
+                triggerSync(false)
             })
             .on('postgres_changes', { event: '*', schema: 'public', filter: `shop_id=eq.${shopId}` }, () => {
-                triggerSync()
+                triggerSync(false)
             })
             .subscribe()
 
-        // 3. Tab Visibility & Window Focus Auto-Revalidation
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                triggerSync()
-            }
-        }
+        // 3. Tab Visibility & Window Focus Auto-Revalidation (throttled to 60s to prevent spamming on print dialogs)
         const handleWindowFocus = () => {
-            triggerSync()
+            const now = Date.now()
+            if (now - lastFocusSyncRef.current > 60000) {
+                lastFocusSyncRef.current = now
+                triggerSync(false)
+            }
         }
 
-        document.addEventListener('visibilitychange', handleVisibilityChange)
         window.addEventListener('focus', handleWindowFocus)
-
-        // 4. Background gentle sync interval (every 25 seconds)
-        const pollInterval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                router.refresh()
-            }
-        }, 25000)
 
         return () => {
             if (localBc) {
                 localBc.close()
             }
             supabase.removeChannel(channel)
-            document.removeEventListener('visibilitychange', handleVisibilityChange)
             window.removeEventListener('focus', handleWindowFocus)
-            clearInterval(pollInterval)
         }
-    }, [shopId, router, supabase])
+    }, [shopId, router, pathname, supabase])
 
     return null
 }
-

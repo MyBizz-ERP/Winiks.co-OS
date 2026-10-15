@@ -178,6 +178,32 @@ This document tracks all features, technical architecture changes, dates of impl
 
 ---
 
+## [2026-10-15] - Phase 13: Supabase Session Auto-Refresh Middleware & POS LiveSync De-thrashing
+
+### 1. Root Cause Analysis: Sudden Kickouts to Login Screen
+* **What Was Happening:**
+  - Cashiers reported that while creating bills in POS or navigating between screens, the application would abruptly kick them out and redirect to `/login` even though their database data was safely stored.
+* **Why It Occurred (Technical Root Cause):**
+  1. **Absence of `@supabase/ssr` Middleware:** Next.js Server Components (`layout.tsx`, `page.tsx`) run in a read-only request context where setting HTTP cookies is forbidden by Next.js architecture. When Supabase's default 1-hour JWT access token expired, `supabase.auth.getUser()` attempted to refresh the session and call `setAll()`, which failed and was caught by a fallback block. Because there was no `src/middleware.ts` to refresh the session cookie on HTTP requests, the browser retained an expired token. On the next server render, `getUser()` returned null and triggered `redirect('/login')`.
+  2. **Aggressive Background LiveSync Polling & Print Dialog Focus Thrashing:** `src/components/LiveSyncProvider.tsx` had an active `setInterval` polling `router.refresh()` every 25 seconds, plus an un-throttled window `focus` event listener. When a cashier completed a bill and the thermal print dialog opened and closed, the window regained focus and immediately fired `router.refresh()`. The server component intercepted the un-refreshed cookie and abruptly redirected the cashier to `/login`.
+  3. **Non-Singleton Browser Client Instance Recreation:** Multiple components were calling `createBrowserClient` ad-hoc, resetting client-side auth timers and memory state.
+
+---
+
+### 2. Architectural Solution Deployed
+* **1. Supabase Session Refresh Middleware (`src/middleware.ts` & `src/utils/supabase/middleware.ts`):**
+  - Engineered standard Next.js edge middleware that intercepts every application request before Server Components execute.
+  - Automatically verifies and refreshes Supabase auth tokens and commits new `Set-Cookie` headers to the HTTP response.
+  - Protected route guard ensures unauthenticated users are neatly directed to `/login`, while active users maintain permanent, seamless sessions that never expire during work.
+* **2. LiveSync De-thrashing & Active POS Protection (`src/components/LiveSyncProvider.tsx`):**
+  - Removed the aggressive 25-second poll interval; real-time CDC WebSockets and native BroadcastChannel already handle instant multi-tab sync.
+  - Throttled window `focus` revalidation to at most once per 60 seconds so print dialog dismissals do not spam `router.refresh()`.
+  - Added route-aware protection on `/erp/wholesale/pos` to prevent server re-renders while a cashier is actively working.
+* **3. Browser Client Singleton (`src/utils/supabase/client.ts`):**
+  - Memoized `createBrowserClient` with `auth: { persistSession: true, autoRefreshToken: true }` so client-side refresh timers are persistent and stable.
+
+---
+
 ## Core System Architecture Reference
 
 | Module | Route / File | Core Responsibility |
